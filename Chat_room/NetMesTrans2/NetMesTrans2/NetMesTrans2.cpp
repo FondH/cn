@@ -8,7 +8,6 @@
 #pragma comment(lib,"ws2_32.lib") 
 using namespace std;
 
-
 bool KeepThread = false;
 string myusername = "default";
 int roomNum = 0;
@@ -20,7 +19,7 @@ vector<mess> messBuffer;
 
 const int chatWidth = 60;
 const int mess_display = 15;
-
+const int mess_max_len = 40;
 
 
 vector<string> split(string& s, char delimiter) {
