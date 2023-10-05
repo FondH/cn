@@ -1,0 +1,4 @@
+﻿  源.cpp
+G:\大三上\计算机网络\code\NetMessage3\NetMessage3\源.cpp(30,23): warning C4018: “<”: 有符号/无符号不匹配
+G:\大三上\计算机网络\code\NetMessage3\NetMessage3\源.cpp(117,26): warning C4018: “<”: 有符号/无符号不匹配
+  NetMessage3.vcxproj -> G:\大三上\计算机网络\code\NetMessage3\Debug\NetMessage3.exe

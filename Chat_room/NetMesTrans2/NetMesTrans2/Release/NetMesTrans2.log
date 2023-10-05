@@ -1,0 +1,9 @@
+﻿  NetMesTrans2.cpp
+G:\大三上\计算机网络\code\NetMesTrans2\NetMesTrans2\NetMesTrans2.cpp(30,23): warning C4018: “<”: 有符号/无符号不匹配
+G:\大三上\计算机网络\code\NetMesTrans2\NetMesTrans2\NetMesTrans2.cpp(120,26): warning C4018: “<”: 有符号/无符号不匹配
+  正在生成代码
+  1 of 305 functions ( 0.3%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    0 functions had inline decision re-evaluated but remain unchanged
+  已完成代码的生成
+  NetMesTrans2.vcxproj -> G:\大三上\计算机网络\code\NetMesTrans2\Release\NetMesTrans2.exe
