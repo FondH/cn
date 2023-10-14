@@ -1,0 +1,3 @@
+﻿  源.cpp
+G:\大三上\计算机网络\code\Chat_room\NetMessage3\NetMessage3\源.cpp(158,62): warning C4267: “初始化”: 从“size_t”转换到“int”，可能丢失数据
+  NetMessage3.vcxproj -> G:\大三上\计算机网络\code\Chat_room\NetMessage3\x64\Debug\NetMessage3.exe

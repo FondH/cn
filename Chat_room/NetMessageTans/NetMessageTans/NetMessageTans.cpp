@@ -23,7 +23,8 @@ int client_start() {
         sockaddr_in sock_addr;
         sock_addr.sin_family = AF_INET;
         sock_addr.sin_port = htons(30000);
-        sock_addr.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
+     
+     //   sock_addr.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
         if (connect(client_sock, (sockaddr*)&sock_addr, sizeof(sock_addr)) == SOCKET_ERROR) {
             printf("连接Server失败");
             closesocket(client_sock);

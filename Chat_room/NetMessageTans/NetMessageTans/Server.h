@@ -3,13 +3,14 @@
 #include<winsock2.h>
 #include<string>
 #include "member.h"
+#include<WS2tcpip.h>
 #include "Room.h"
 #include<vector>
 #pragma comment(lib,"ws2_32.lib") 
 using namespace std;
 
 vector<SOCKET> client_sockets;
-int room_num = 2;
+int room_num = 3;
 int room_members = 5;
 SOCKET listen_socket;
 
@@ -85,7 +86,7 @@ DWORD WINAPI ClientHandler(LPVOID param) {
 	// ... 发送房间状态 ...
 	string mess = Mess_send(0, "");
 	send(client_socket,mess.c_str(),mess.size()+1,0);
-	cout << "Server send：" << mess << "to " << int(client_socket)<<endl;
+	cout << "Server send：" << mess << " to " << int(client_socket)<<endl;
 
 	int roomNumber=-1;  
 	string username="default";
@@ -131,7 +132,6 @@ DWORD WINAPI ClientHandler(LPVOID param) {
 		
 	}
 	
-//	徐翊航  xu yi hang
 	// 客户端断开连接后，从房间中移除/
 	rooms[roomNumber].remove(thisClient);
 	closesocket(thisClient.get_socket());
@@ -156,14 +156,15 @@ public:
 		sockaddr_in sock_addr;
 		sock_addr.sin_family = AF_INET;
 		sock_addr.sin_port = htons(port);
-		sock_addr.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
+		inet_pton(AF_INET,"192.168.137.1",& sock_addr.sin_addr);
+		//sock_addr.sin_addr.S_un.S_addr = inet_addr("192.168.137.1");
 
 		if (bind(listen_socket, (sockaddr*)&sock_addr, sizeof(sock_addr)) == SOCKET_ERROR) {
 			printf("Server Bind defeat！");
 			closesocket(listen_socket);
 		}
 		cout << "Fond-Chat Server Has Started in port: " << port<<" ..."  << "\n";
-
+		
 	}
 
 
@@ -194,7 +195,7 @@ public:
 			//char* room_status = get_room_status();
 			SOCKET sClient = _listen();
 			if (sClient != INVALID_SOCKET) 
-				CreateThread(NULL, 0, ClientHandler, (LPVOID)sClient, 0, NULL);
+			CreateThread(NULL, 0, ClientHandler, (LPVOID)sClient, 0, NULL);
 
 		
 		}

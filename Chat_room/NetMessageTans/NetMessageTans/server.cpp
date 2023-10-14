@@ -125,6 +125,9 @@ int start() {
 
 
 int main() {
+    Server server(8999);
+    server.start_listen();
+
   /*
     start();
     char* sendBuffer = new char[25];
@@ -145,8 +148,7 @@ int main() {
     }
     cout <<mess.c_str();
     */
-    Server server(8999);
-        server.start_listen();
+
 
     
 }

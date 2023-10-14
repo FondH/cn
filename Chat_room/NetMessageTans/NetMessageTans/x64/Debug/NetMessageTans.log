@@ -1,0 +1,4 @@
+﻿  server.cpp
+G:\大三上\计算机网络\code\Chat_room\NetMessageTans\NetMessageTans\Server.h(50,67): warning C4267: “参数”: 从“size_t”转换到“int”，可能丢失数据
+G:\大三上\计算机网络\code\Chat_room\NetMessageTans\NetMessageTans\Server.h(88,49): warning C4267: “参数”: 从“size_t”转换到“int”，可能丢失数据
+  NetMessageTans.vcxproj -> G:\大三上\计算机网络\code\Chat_room\NetMessageTans\x64\Debug\NetMessageTans.exe

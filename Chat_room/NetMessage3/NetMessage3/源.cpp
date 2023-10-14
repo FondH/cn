@@ -10,6 +10,7 @@ using namespace std;
 
 
 volatile bool KeepThread = false;
+volatile bool Isready = 0;
 string myusername = "default";
 int roomNum = 0;
 int currentNum = 1;
@@ -17,6 +18,8 @@ string sendString = "";
 char* recvBuffer = new char[255];
 char* sendBuffer = new char[255];
 vector<mess> messBuffer;
+
+
 
 const int chatWidth = 60;
 const int mess_display = 15;
@@ -84,7 +87,13 @@ void recvMessProc() {
 
     }
     else if (tokens[0] == "status") {
-        cout << tokens[1] << endl;
+        mess tm = { "ready","default",tokens[1],"0"};
+    
+        messBuffer.push_back(tm);
+        Isready = 0;
+
+        //cout << tokens[1] << endl;
+        
     }
     else if (tokens[0] == "exit") {
         mess tm = { "sys",tokens[1],"exit!",tokens[2] };
@@ -122,6 +131,17 @@ void sendMessProc() {
     sendString = stringBuffer;
 }
 void display() {
+    if (!Isready) {
+        vector<string> status = split(messBuffer[0].message, ',');
+        cout << "The Server's Room status:(Current num / Max num)" << endl;
+        int i = 0;
+        for (string sta : status) 
+            cout << "Room " << i++ << ": " << sta << endl;
+        
+        
+        return;
+    }
+        
     cout << "+----------------------------------------------------------------+\n";
     cout << "| Room " << roomNum << " | People: " << currentNum << " | " << "Current Time:";
     printCurrentTime();
@@ -131,6 +151,7 @@ void display() {
         if (m.type == "sys") {
             cout << "           " << m.username << "  " << m.message << "...." << endl;
         }
+
         else {
             if (m.username == myusername)
             {
@@ -197,8 +218,8 @@ int CreateThread(SOCKET id) {
 int main() {
     mess tp = { "chat","12","HHH","12" };
     mess tp2 = { "chat" ,"default","aL","12" };
-    messBuffer.push_back(tp);
-    messBuffer.push_back(tp2);
+   // messBuffer.push_back(tp);
+   // messBuffer.push_back(tp2);
     //display();
     string username;
     WORD sockVersion = MAKEWORD(2, 2);
@@ -219,23 +240,34 @@ int main() {
         sockaddr_in sock_addr;
         sock_addr.sin_family = AF_INET;
         sock_addr.sin_port = htons(8999);
-        inet_pton(AF_INET, "127.0.0.1", &sock_addr.sin_addr);
+        inet_pton(AF_INET, "192.168.137.1", &sock_addr.sin_addr);
         if (connect(client_sock, (sockaddr*)&sock_addr, sizeof(sock_addr)) == SOCKET_ERROR) {
             printf("连接Server失败");
-
             closesocket(client_sock);
             break;
         }
 
         CreateThread(client_sock);
-
+        string tpstring = "";
+       // myusername = "xuyihang";
+        //roomNum = 1;
         // 选择房间进入
-        string tpstring = "choice:1:xuyihang";
-        myusername = "xuyihang";
-        roomNum = 1;
 
+       
+        while (!Isready) {
+            Sleep(2000);
+            cout << "\nPlease input roomNum:";
+            cin >> roomNum;
+            cout << "\nPlease input username: ";
+            cin >> myusername;
 
-        send(client_sock, tpstring.c_str(), 255, 0);
+            Isready = 1;
+            tpstring +="choice:"+ to_string(roomNum) + ":" + myusername;
+            send(client_sock, tpstring.c_str(), 255, 0);
+            break;
+        }
+        
+
 
         //接受消息 刷新界面
 
@@ -253,6 +285,7 @@ int main() {
             
         }
         closesocket(client_sock);
+        break;
     }
 
     WSACleanup();
