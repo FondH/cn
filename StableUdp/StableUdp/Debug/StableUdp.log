@@ -1,2 +1,4 @@
 ﻿  main.cpp
+G:\大三上\计算机网络\code\StableUdp\StableUdp\main.cpp(199,37): warning C4244: “=”: 从“streamsize”转换到“int”，可能丢失数据
+G:\大三上\计算机网络\code\StableUdp\StableUdp\main.cpp(226,57): warning C4805: “==”: 在操作中将类型“int”与类型“bool”混合不安全
   StableUdp.vcxproj -> G:\大三上\计算机网络\code\StableUdp\Debug\StableUdp.exe
