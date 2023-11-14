@@ -36,7 +36,7 @@
 
 ![image-20231106183148630](rdt3.0.png)
 
-![image-20231106200810922](C:\Users\lenovo\AppData\Roaming\Typora\typora-user-images\image-20231106200810922.png)
+![image-20231106200810922](rdt2.png)
 
 ## 程序设计
 
@@ -67,6 +67,5 @@ UDP报文格式
 | Payload Length        | 16        | Data的长度                       |
 | Header Length         | 16        | 报文头部的长度                   |
 | Data                  | ——        | 实际数据                         |
-
 
 
