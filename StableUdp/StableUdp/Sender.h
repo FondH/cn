@@ -3,17 +3,37 @@
 #include<WS2tcpip.h>
 #include <iostream>
 #include <fstream>
-#include <fstream>
 #include <string>
-#include <time.h>
+
 #include<iomanip>
+#include <ctime>
+#include<stdlib.h>
+#include <windows.h>
 #include "UDP.h"
 #pragma comment(lib, "Ws2_32.lib")
 
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 using namespace std;
 
-#define MAX_TIME 10 * CLOCKS_PER_SEC 
+#define MAX_TIME  CLOCKS_PER_SEC 
+
+
+const int MAX_DELAY_MS = 10; // 最大延迟时间（毫秒）
+const double LOSS_RATE = 0.02; // 丢包率（0.1 表示10%的丢包率）
+
+
+void SimulateDelay() {
+
+    Sleep(MAX_DELAY_MS);
+}
+
+bool SimulateDrop() {
+    
+    double i = rand()/double(RAND_MAX);
+    return i < LOSS_RATE;
+}
+
+
 
 class Sender {
 private:
@@ -21,7 +41,7 @@ private:
     SOCKET s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     sockaddr_in* dst_addr= new sockaddr_in();
     sockaddr_in* src_addr = new sockaddr_in();
-
+ 
 
     Udp package = Udp();
     char* SendBuffer = new char[PacketSize];
@@ -30,25 +50,39 @@ private:
     string fileName = "Fond.txt";
     streamsize fileSize = 0;
     HANDLE send_runner_handle = NULL;
-    volatile bool send_runner_keep = true;
 
+
+    volatile bool send_runner_keep = true;
+    volatile bool connected = false;
+
+    int bytes;
 public:
     Sender();
 
     int _send(int size) {
 
         memcpy(this->SendBuffer, &this->package, size + HeadSize);
-        int rst_byte  = sendto(this->s, this->SendBuffer, size + HeadSize, 0, (sockaddr*)this->dst_addr, sizeof(*this->dst_addr));
-        char error_message[100];
-        if (rst_byte == SOCKET_ERROR) {
-            int error_code = WSAGetLastError();
-            cerr << "sendto failed with error: " << error_code << endl;
-            return rst_byte;
+
+        int rst_byte= size + HeadSize;
+        if (!SimulateDrop()) {
+            SimulateDelay();
+            rst_byte = sendto(this->s, this->SendBuffer, size + HeadSize, 0, (sockaddr*)this->dst_addr, sizeof(*this->dst_addr));
+
+            char error_message[100];
+            if (rst_byte == SOCKET_ERROR) {
+                int error_code = WSAGetLastError();
+                cerr << "sendto failed with error: " << error_code << endl;
+                return rst_byte;
+            }
+
         }
+        else
+            cout << "------------------ DROP ------------------ " << endl;
+
        
         cout << "------------------ SEQ: "<< this->package.header.seq<<" -------------------\n";
         print_udp(this->package);
-       
+        this->bytes += size + HeadSize;
         return rst_byte;
     }
     int get_connection();
@@ -62,16 +96,30 @@ public:
     void GetFile(string name) { 
         fileSize = ReadFile(name, FileBuffer);
     };
-
+    friend DWORD WINAPI ConnectHandler(LPVOID param);
     friend DWORD WINAPI SendHandler(LPVOID param);
     ~Sender();
 };
 Sender::Sender() {
+    //srand(static_cast<unsigned int>(time(0)));
+    //Bind 8998 
+    this->src_addr->sin_family = AF_INET;
+    this->src_addr->sin_port = htons(8998);
+    inet_pton(AF_INET, ReciIp, &(src_addr->sin_addr));
+    int iResult = bind(s, (struct sockaddr*)this->src_addr, sizeof(*src_addr));
 
+    if (iResult != 0)
+        cout << "Bind failed with error: " << WSAGetLastError() << endl;
+
+    else
+        cout << "Sender set up\n" << "Port: " << ntohs(this->src_addr->sin_port)<<endl;
    
+    //非阻塞态
+    unsigned long mode = 1;
+    ioctlsocket(this->s, FIONBIO, &mode);
     FileBuffer = new char[BufferSize];
     send_runner_handle = NULL;
-
+    bytes = 0;
 }
 Sender::~Sender() {
     closesocket(s);
@@ -80,26 +128,28 @@ Sender::~Sender() {
 
 
 DWORD WINAPI SendHandler(LPVOID param) {
- 
+    srand((unsigned)time(NULL));
     char* ReciBuffer = new char[PacketSize];
     Sender *sender = (Sender*)param;
     
 
     string name_size = sender->fileName + ":" + to_string(sender->fileSize);
 
-    /* 遍历文件 窗口固定patloadSize*/
+    /* 遍历文件 窗口固定payloadSize*/
     char* iter = sender->FileBuffer;
     streamsize indx = 0;
 
 
     streamsize fileSize = sender->fileSize;
     int payload_size = sizeof(name_size);
-
+    
 
     int seq = 0;
     bool status = 0;
     bool st = 1;
     bool fin = 0;
+
+    clock_t send_st = clock();
     while (sender->send_runner_keep && !fin) {
         //发送seq状态0/1的包 
         if (st)
@@ -107,7 +157,7 @@ DWORD WINAPI SendHandler(LPVOID param) {
          
             sender->package.set_status(status);
             sender->package.set_flag(st, fin);
-            sender->package.packet_data(name_size.c_str(), sizeof(name_size));
+            sender->package.packet_data(name_size.c_str(), payload_size);
 
             sender->_send(payload_size);
             //cout.write(sender->package.payload, sizeof(name_size));
@@ -124,7 +174,7 @@ DWORD WINAPI SendHandler(LPVOID param) {
             while (recvfrom(sender->s, ReciBuffer, PacketSize, 0, (struct sockaddr*)sender->dst_addr, &dst_addr_len) <= 0)
             {
                 if (clock() - sec_st > MAX_TIME) {
-                    cout << "----- Time out -----\n" << "Send again: send_status: " << status << " send_seq: " << seq << endl;
+                    cout << "-------- Time out --------\n" << "Send again: send_status: " << status << " send_seq: " << seq << endl;
                     sender->_send(payload_size);
                     sec_st = clock();
    
@@ -133,8 +183,8 @@ DWORD WINAPI SendHandler(LPVOID param) {
             
             Udp* dst_package = (Udp*)ReciBuffer;
             if (
-                (sender->package.cmp_cheksum() )
-                && (sender->package.header.get_status() == status)
+                (dst_package->cmp_cheksum() )
+                && (dst_package->header.get_status() == status)
                 && (dst_package->header.get_Ack())
                 )
             {
@@ -169,6 +219,7 @@ DWORD WINAPI SendHandler(LPVOID param) {
                 }
 
                 else {     
+                    payload_size = PayloadSize;
                     sender->package.set_flag(0, 0, status, 1, 0, 0);
                 }
 
@@ -191,24 +242,115 @@ DWORD WINAPI SendHandler(LPVOID param) {
 
     }
 
-    /*三次挥手*/
-    cout << "线程退出\n";
+    cout << "Sending Over\n";
+    cout << "Total Length: " << sender->bytes << " bytes\n"<<"Duration: " << double((clock() - send_st)/ CLOCKS_PER_SEC)<<" secs"<<endl;
+    cout << "Speed Rate: " << double( sender->bytes / ((clock() - send_st) / CLOCKS_PER_SEC)) << " Bps"<<endl;
     return 0;
 }
+
+
+/*
+三次挥手状态机
+
+*/
+DWORD WINAPI ConnectHandler(LPVOID param) {
+    srand((unsigned)time(NULL));
+    char* ReciBuffer = new char[PacketSize];
+    
+
+    Sender* sender = (Sender*)param;
+    socklen_t dst_addr_len = sizeof(*sender->dst_addr);
+    
+    bool SYN = 1;
+    bool ACK = 0;
+
+    bool succed = 0;
+    
+
+
+    clock_t sec_st = clock();
+
+    while (!succed) {
+
+        sender->package.set_flag(SYN, 0, ACK);
+        sender->package.set_cheksum();
+        sender->_send(0);
+
+        while (recvfrom(sender->s, ReciBuffer, PacketSize, 0, (struct sockaddr*)sender->dst_addr, &dst_addr_len) <= 0){
+            
+            if(clock() - sec_st > MAX_TIME) {
+                cout << "-------- Time out --------\n";
+                sender->_send(0);
+                sec_st = clock();
+            }
+            
+        }
+
+        Udp* dst_package = (Udp*)ReciBuffer;
+        int dSYN = dst_package->header.get_Syn();
+        int dACK = dst_package->header.get_Ack();
+        if (
+            (dst_package->cmp_cheksum())
+            && (dst_package->header.get_Ack())
+            )//校验和、ACK
+        {
+            cout << "\n------------------- Dst Package ---------------- \nSYN: " << dst_package->header.get_Syn() << " ACK: " << dst_package->header.get_Ack()<<endl;
+
+           
+            if (SYN && !ACK) {
+                if (dSYN && dACK)
+                {
+                    SYN = 0;ACK = 1;
+                    cout << "第二次挥手成功"<<endl;
+
+                    succed = true;
+                    cout << "Send Thread Ready" << endl;
+                }
+                else {
+                    cout << "第二次挥手失败" << endl;
+                    continue;
+                }
+                    
+                   
+            }
+            else 
+                {   //重新回1状态
+                    SYN =1;ACK = 0;
+                    cout << "重新挥手" << endl;
+                }
+                
+            }     
+    }
+    sender->connected = 1;
+    return 1;
+}
+
+
+
+
+
 int Sender::get_connection() {
 
     this->dst_addr->sin_family = AF_INET;
     this->dst_addr->sin_port = htons(8999);
     inet_pton(AF_INET, ReciIp, &(this->dst_addr->sin_addr));
-   
+    cout << "Dst Prot: " << ntohs(this->dst_addr->sin_port)<<endl;
     //cout << "Dst addr " << inet_ntoa(dst_addr.sin_addr) << " : " << ntohs(dst_addr.sin_port)<<endl;
 
     /*三次握手*/
     
+    cout << "Try to connect\n\n" << endl;
+    CreateThread(NULL, 0,ConnectHandler, (LPVOID)this, 0, NULL);
 
-    cout << "Sender is Ready: " << endl;
 
-    Sender* tp = (Sender*)this;
+
+
+
+    while (!this->connected) 
+        Sleep(100);
+    
+    cout << "\n\nstart to send: " << endl;
+    
     send_runner_handle = CreateThread(NULL, 0, SendHandler, (LPVOID)this, 0, NULL);
 
 

@@ -4,7 +4,7 @@
 #include <fstream>
 #define BufferSize 20 * 1024 * 1024 
 #define HeadSize sizeof(Header)
-#define PayloadSize (4 * 1024)
+#define PayloadSize (16 * 1024)
 #define PacketSize HeadSize+PayloadSize
 
 
@@ -66,11 +66,13 @@ public:
         memcpy(payload, c, PayloadSize);
     }
     void packet_data(const char* c, int size) {
+        //size 数据段大小
         //header.set_Ack(1);
         this->set_cheksum();
+        this->header.set_size(size);
         memset(this->payload, 0, PayloadSize);
         memcpy(this->payload, c, size);
-        cout << "1";
+        
     }
     void set_flag(bool SYN, bool Fin, bool ACK) {
         this->header.set_Syn(SYN);
@@ -110,7 +112,8 @@ public:
 
 void print_udp(Udp& u) {
     Header header = u.header;
-    cout << "Flag: " << hex << header.flag
+    cout << "Flag: " << hex << header.flag;
+    cout << dec
         << ", Checksum: " << header.checksum
         << ", Sequence: " << header.seq
         << ", Acknowledgment: " << header.ack

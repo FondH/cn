@@ -12,9 +12,8 @@ using namespace std;
 
 
 
-
-
 int main(){
+
     string filename = "test.jpg";
     string outFile = "out.txt";
     WSADATA wsaData;
