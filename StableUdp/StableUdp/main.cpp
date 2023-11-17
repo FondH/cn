@@ -14,22 +14,33 @@ using namespace std;
 
 int main(){
 
-    string filename = "test.jpg";
-    string outFile = "out.txt";
+    string filename = "helloworld.txt";
+
     WSADATA wsaData;
     int iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
-    if (iResult != NO_ERROR) {
+    if (iResult != NO_ERROR) 
         cout << "WSAStartup failed with error: " << iResult << endl;
 
-    }
+    
     Sender sender = Sender();
-    sender.GetFile(filename);
-    sender.get_connection();
     string cin_buffer;
+    //sender.GetFile(filename);
+   // sender.get_connection();
+   
+
+    string a;
     while (true) {
+        cout << "input filename\n";
+        cin >> filename;
+        sender.GetFile(filename);
+        sender.init();
+        sender.get_connection();
+
+        cout << "q to exit\n";
         cin >> cin_buffer;
         if (cin_buffer == "q")
             break;
-
     }
+
+
 }

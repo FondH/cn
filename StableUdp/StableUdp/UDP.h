@@ -2,15 +2,14 @@
 #include<iostream>
 #include <fstream>
 #include <fstream>
-#define BufferSize 20 * 1024 * 1024 
-#define HeadSize sizeof(Header)
-#define PayloadSize (16 * 1024)
-#define PacketSize HeadSize+PayloadSize
-
 
 #define ReciIp "127.0.0.1"
 #define ReciPort 8999
 
+#define BufferSize 20 * 1024 * 1024 
+#define HeadSize sizeof(Header)
+#define PayloadSize (16 * 1024)
+#define PacketSize HeadSize+PayloadSize
 using streamsize = long long;
 using namespace std;
 struct Header {
@@ -48,6 +47,8 @@ struct Header {
     int get_Ack() { return (flag & (0x1)) > 0 ? 1 : 0; }
 };
 
+
+
 class Udp {
 
 public:
@@ -79,6 +80,10 @@ public:
         this->header.set_Fin(Fin);
         this->header.set_Ack(ACK);
     }
+    void set_flag(bool STATUS) {
+        this->header.set_Status(STATUS);
+        this->header.set_Ack(1);
+    }
     void set_status(bool STATUS) {
         this->header.set_Status(STATUS);
         this->header.set_Ack(1);
@@ -94,16 +99,28 @@ public:
         this->header.set_End(Ed);
     }
     void set_cheksum() {
+        int a = calc_cheksum();
         this->header.checksum = ~calc_cheksum();
     }
 
     uint16_t calc_cheksum() {
         /*ToDo*/
-        return 0;
+        int count = (PacketSize) / 2;
+        uint16_t* buf = (uint16_t*)this;
+        int res = 0;
+        while (count--) {
+            res += *buf++;
+            if (res & 0x10000) {
+                res &= 0xffff;
+                res +=1;
+            }
+        }
+        return (res & 0xffff);
+
     }
     bool cmp_cheksum() {
         uint16_t ut = calc_cheksum();
-        return (ut | header.checksum) == 0xffff;
+        return (ut | header.checksum);
     }
     ~Udp() {
 
@@ -129,7 +146,7 @@ void Out2file(const char* src, const streamsize& size, const string& dst_name) {
     if (!outFile.good())
         cerr << "Write Defeted" << endl;
     outFile.close();
-
+    cout << "Write Fin" << endl;
 }
 //¶ÁÈ¡ÖÁbuffer
 streamsize ReadFile(string name, char* buffer) {

@@ -3,11 +3,13 @@
 #include<WS2tcpip.h>
 #include <iostream>
 #include <fstream>
-#include <fstream>
 #include <string>
 #include <time.h>
 #include<iomanip>
+#include<stdlib.h>
 #include<vector>
+#include <windows.h>
+#include<thread>
 #include "UDP.h"
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -15,59 +17,49 @@
 using namespace std;
 
 
+const int MAX_DELAY_MS = 100; // 最大延迟时间（毫秒）
+const double MAX_DELAY_RATE = 0.1;
+
+
+void SimulateDelay(bool IsDelay) {
+    if (IsDelay)
+        Sleep(MAX_DELAY_MS);
+
+}
+
+
 class Reciver {
     SOCKET s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    sockaddr_in* reci_addr= new sockaddr_in();
-    sockaddr_in* send_addr= new sockaddr_in();
-    
+    sockaddr_in* reci_addr = new sockaddr_in();
+    sockaddr_in* send_addr = new sockaddr_in();
+
     Udp package = Udp();
 
     char* SendBuffer = new char[PacketSize];
-
-    
     char* FileBuffer = new  char[BufferSize];
     string InforBuffer = "";
     streamsize fileSize = 0;
-    HANDLE reci_runner_handle = NULL;
 
-    volatile bool connected = true;
+    HANDLE reci_runner_handle = NULL;
+    volatile bool connected = false;
     volatile bool reci_runner_keep = true;
 
-    int bytes = 0;
+    int bytes = 0; //sum_of sended bytes
 public:
-    Reciver() {
-
-        reci_addr->sin_family = AF_INET;
-        reci_addr->sin_port = htons(8999);
-        inet_pton(AF_INET, ReciIp, &(reci_addr->sin_addr));
-
-        int iResult = bind(s, (struct sockaddr*)this->reci_addr, sizeof(*reci_addr));
-        if (iResult != 0) 
-            cout << "Bind failed with error: " << WSAGetLastError() << endl;     
-    }
-    int _send() {
+    Reciver();
+    void _send(char* tb, bool IsDelay);
+    void ThreadSend() {
+        bool IsDelay = 0;
+        double i = rand() / (double)RAND_MAX;
+        if (i < MAX_DELAY_RATE)
+            IsDelay = 1;
+        //cout << "\n!! " << i <<" " << IsDelay << "!!\n";
         this->package.set_cheksum();
-        memcpy(SendBuffer, &package, HeadSize);
-        int rst_byte = sendto(this->s, (const char*)SendBuffer, HeadSize, 0, (struct sockaddr*)send_addr, sizeof(*send_addr));
-        char error_message[100];
-        if (rst_byte == SOCKET_ERROR) {
-            int error_code = WSAGetLastError();
-            cerr << "sendto failed with error: " << error_code << endl;
-            return rst_byte;
-        }
+        char* threadBuffer = new char[PacketSize];
+        memcpy(threadBuffer, &this->package, HeadSize);
 
-        cout << "\n-+-+-+-+-+-+-+-+-+- Reciver' Packetage -+-+-+-+-+-+-+-+-+-\n";
-        //print_udp(this->package);
-
-        cout <<"SYN: "<< this->package.header.get_Syn()
-            <<" ACK "<< this->package.header.get_Ack()
-            << "ST: " << this->package.header.get_st()
-            << " ED: " << this->package.header.get_end() 
-            <<" STATUS: " <<this->package.header.get_status()<< endl;
-        cout << "-+-+-+-+-+-+-+-+-+-SEQ: " << this->package.header.seq << " -+-+-+-+-+-+-+-+-+-\n";
-        
-        this->bytes += HeadSize;
-        return rst_byte;
+        thread send_thread(&Reciver::_send, this, threadBuffer, IsDelay);
+        send_thread.detach();
     }
     int get_connection();
     void to_file();
@@ -86,11 +78,59 @@ public:
             cerr << error_code;
         }
     }
+    void init() {
+
+        memset(this->FileBuffer, 0, BufferSize);
+        InforBuffer = "";
+        fileSize = 0;
+        connected = false;
+        reci_runner_keep = true;
+        bytes = 0;
+    }
+
 };
+Reciver::Reciver() {
+
+    reci_addr->sin_family = AF_INET;
+    reci_addr->sin_port = htons(8999);
+    inet_pton(AF_INET, ReciIp, &(reci_addr->sin_addr));
+
+    int iResult = bind(s, (struct sockaddr*)this->reci_addr, sizeof(*reci_addr));
+    if (iResult != 0)
+        cout << "Bind failed with error: " << WSAGetLastError() << endl;
+}
+void Reciver::_send(char* tb, bool IsDelay) {
+
+    //this->package.set_cheksum();
+    //memcpy(tb, &package, HeadSize);
+    cout << "\n\n+--+--+- Reciver'Packetage +--+--+--+--+\n";
+    //print_udp(this->package);
+
+    cout << "|  SYN: " << this->package.header.get_Syn()
+        << " ACK " << this->package.header.get_Ack()
+        << "ST: " << this->package.header.get_st()
+        << " ED: " << this->package.header.get_end()
+        << " STATUS: " << this->package.header.get_status() << "   |" << endl;
+    cout << "+--+--+--+--+- SEQ: " << this->package.header.seq << " +--+--+--+--+--+\n\n";
+
+    this->bytes += HeadSize;
+
+
+    SimulateDelay(IsDelay);
+
+    int rst_byte = sendto(this->s, (const char*)tb, HeadSize, 0, (struct sockaddr*)this->send_addr, sizeof(*(this->send_addr)));
+    char error_message[100];
+    if (rst_byte == SOCKET_ERROR) {
+        int error_code = WSAGetLastError();
+        cerr << "sendto failed with error: " << error_code << endl;
+        return;
+    }
+    return;
+}
 void Reciver::to_file() {
     vector<string> tokens;
     string token;
-    
+
     for (int i = 0; i < this->InforBuffer.length(); i++) {
         if (this->InforBuffer[i] != ':') {
             token += this->InforBuffer[i];
@@ -103,14 +143,15 @@ void Reciver::to_file() {
     if (!token.empty()) {
         tokens.push_back(token);
     }
-    Out2file(this->FileBuffer, stoi(tokens[1]), "temp.jpg");
+    tokens[0] = "(reci)" + tokens[0];
+    Out2file(this->FileBuffer, stoi(tokens[1]), tokens[0]);
 
 }
 DWORD WINAPI ReciHandler(LPVOID param) {
     cout << "Start Acc the file\n";
     Reciver* reci = (Reciver*)param;
+    srand((unsigned)time(NULL));
 
-    
 
     char* buffer = new char[PacketSize];
     bool wait_ack = 0;
@@ -131,28 +172,29 @@ DWORD WINAPI ReciHandler(LPVOID param) {
             */
 
             Udp* package = (Udp*)buffer;
-            cout << " ------------- Sender: ------------\n";
+            cout << "\n+--------- Sender' Package ---------+\n";
             //print_udp(*package);
-            cout << "ST: " << package->header.get_st() <<
-                " ED: " << package->header.get_end()<<
-                " STATUS: " <<package->header.get_status()<< endl;
+            cout << "|         ST: " << package->header.get_st() <<
+                " ED: " << package->header.get_end() <<
+                " STATUS: " << package->header.get_status() <<
+                "     |" << endl;
+            cout << "+------------- SEQ: " << package->header.seq << " -------------+\n";
 
-   
             if (!package->cmp_cheksum() || !(package->header.get_status() == wait_ack))
             {
-                cout << "------- Time Out or CheckSum error -------" << endl;
-                rst_byte = reci->_send();
+                cout << "---------- Time Out or CheckSum error ---------\n" << endl;
+                reci->ThreadSend();
                 continue;
 
             }
 
-            
+
 
             // 通过校验和 发送状态对应
 
-            if (package->header.get_st()) 
+            if (package->header.get_st())
                 reci->InforBuffer += package->payload;
-            
+
             else
             {
 
@@ -161,7 +203,7 @@ DWORD WINAPI ReciHandler(LPVOID param) {
                 memcpy(iter, package->payload, package->header.data_size);
                 iter += package->header.data_size;
             }
-            
+
             if (package->header.get_end())
                 //fin报文收到后，则完全收到了，回复一个fin报文，让sender结束。即挥手第二次
                 fin = 1;
@@ -175,31 +217,29 @@ DWORD WINAPI ReciHandler(LPVOID param) {
             reci->package.header.seq = seq++;
             reci->package.header.ack = package->header.seq + 1;
 
-            rst_byte = reci->_send();    
+            reci->ThreadSend();
             wait_ack = !wait_ack;
 
         }
 
 
     }
-    
+
     cout << "Thread exit... \nTotal Length: " << reci->bytes << " bytes\n" << "Duration: " << (double)((clock() - send_st) / CLOCKS_PER_SEC) << " secs" << endl;
     cout << "Speed Rate: " << (double)reci->bytes / ((clock() - send_st) / CLOCKS_PER_SEC) << " Bps" << endl;
     reci->to_file();
     return 1;
 }
 
-
 DWORD WINAPI ConnectHandler(LPVOID param) {
     srand((unsigned)time(NULL));
     char* ReciBuffer = new char[PacketSize];
-
+    memset(ReciBuffer, 0, PacketSize);
 
     Reciver* reci = (Reciver*)param;
     socklen_t send_addr_len = sizeof(*reci->send_addr);
 
     bool SYN = 0;
-    
     bool succed = 0;
 
 
@@ -211,18 +251,19 @@ DWORD WINAPI ConnectHandler(LPVOID param) {
 
         while (recvfrom(reci->s, ReciBuffer, PacketSize, 0, (struct sockaddr*)reci->send_addr, &send_addr_len) <= 0) {
 
-          /* if (clock() - sec_st > MAX_TIME) {
-                cout << "-------- Time out --------\n";
-                sender->_send(0);
-                sec_st = clock();
-            }*/
+            /* if (clock() - sec_st > MAX_TIME) {
+                  cout << "-------- Time out --------\n";
+                  sender->_send(0);
+                  sec_st = clock();
+              }*/
+            continue;
 
         }
 
         Udp* dst_package = (Udp*)ReciBuffer;
         int dSYN = dst_package->header.get_Syn();
         int dACK = dst_package->header.get_Ack();
-        if ( dst_package->cmp_cheksum() )
+        if (dst_package->cmp_cheksum())
         {
             cout << "------------------- Dst Package ---------------- \nSYN: " << dst_package->header.get_Syn() << " ACK: " << dst_package->header.get_Ack() << endl;
 
@@ -232,7 +273,7 @@ DWORD WINAPI ConnectHandler(LPVOID param) {
                 {
                     SYN = 1;
                     reci->package.set_flag(SYN, 0, 1);
-                    reci->_send();
+                    reci->ThreadSend();
                     cout << "第一次挥手成功" << endl;
                 }
                 else {
@@ -245,8 +286,8 @@ DWORD WINAPI ConnectHandler(LPVOID param) {
                     succed = true;
                     cout << "第三次握手成功" << endl;
                     cout << "Recive Thread ready" << endl;
-                    reci->package.set_flag(0,0,1);
-                 }
+                    reci->package.set_flag(0, 0, 1);
+                }
 
             }
 
@@ -258,12 +299,11 @@ DWORD WINAPI ConnectHandler(LPVOID param) {
 }
 
 
-
-
 int Reciver::get_connection() {
     /*等待连接 reci*/
+
     cout << "wait..." << endl;
-    
+
     /*三次握手  回复第二次*/
 
     CreateThread(NULL, 0, ConnectHandler, (LPVOID)this, 0, NULL);
@@ -273,29 +313,32 @@ int Reciver::get_connection() {
         Sleep(100);
     cout << "\n\nstart to reci !" << endl;
     reci_runner_handle = CreateThread(NULL, 0, ReciHandler, (LPVOID)this, 0, NULL);
- 
-     return 1;
+
+    return 1;
 }
 
 
-
-
-
-int main(){
+int Udp_main() {
     WSADATA wsaData;
     int iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
-    if (iResult != NO_ERROR) 
+    if (iResult != NO_ERROR)
         cout << "WSAStartup failed with error: " << iResult << endl;
-        
-    
+
+
     Reciver reciver = Reciver();
-    reciver.get_connection();
+    //reciver.get_connection();
    // reciver.send_rto();
+
+
     string cin_buffer;
+    int i = 1;
     while (true) {
+        cout << "No: " << i++ << endl;
+        reciver.init();
+        reciver.get_connection();
         cin >> cin_buffer;
         if (cin_buffer == "q")
             break;
-
     }
+    return 0;
 }

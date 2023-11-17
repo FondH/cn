@@ -4,7 +4,6 @@
 #include <iostream>
 #include <fstream>
 #include <string>
-
 #include<iomanip>
 #include <ctime>
 #include<stdlib.h>
@@ -15,16 +14,17 @@
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 using namespace std;
 
-#define MAX_TIME  CLOCKS_PER_SEC 
+#define MAX_TIME  0.2*CLOCKS_PER_SEC 
 
 
-const int MAX_DELAY_MS = 10; // 最大延迟时间（毫秒）
-const double LOSS_RATE = 0.02; // 丢包率（0.1 表示10%的丢包率）
+const double LOSS_RATE = 0.01; // 丢包率（0.1 表示10%的丢包率）
 
 
 void SimulateDelay() {
-
-    Sleep(MAX_DELAY_MS);
+    double i = rand() / RAND_MAX;
+    if(i < MAX_DELAY_RATE)
+        Sleep(MAX_DELAY_MS);
+ 
 }
 
 bool SimulateDrop() {
@@ -59,44 +59,23 @@ private:
 public:
     Sender();
 
-    int _send(int size) {
-
-        memcpy(this->SendBuffer, &this->package, size + HeadSize);
-
-        int rst_byte= size + HeadSize;
-        if (!SimulateDrop()) {
-            SimulateDelay();
-            rst_byte = sendto(this->s, this->SendBuffer, size + HeadSize, 0, (sockaddr*)this->dst_addr, sizeof(*this->dst_addr));
-
-            char error_message[100];
-            if (rst_byte == SOCKET_ERROR) {
-                int error_code = WSAGetLastError();
-                cerr << "sendto failed with error: " << error_code << endl;
-                return rst_byte;
-            }
-
-        }
-        else
-            cout << "------------------ DROP ------------------ " << endl;
-
-       
-        cout << "------------------ SEQ: "<< this->package.header.seq<<" -------------------\n";
-        print_udp(this->package);
-        this->bytes += size + HeadSize;
-        return rst_byte;
-    }
+    int _send(int size);  
     int get_connection();
     int set_flag(bool seq, bool ack, bool syn);
-    int set_seq_ack(int seq, int ack) {
-        this->package.header.set_seq(seq);
-        this->package.header.set_ack(ack);
-    };
     void print_info() { print_udp(package); }
     int set_size(int s) { package.header.set_size(s); }
     void GetFile(string name) { 
-        fileSize = ReadFile(name, FileBuffer);
+        this->fileName = name;
+        this->fileSize = ReadFile(name, FileBuffer);
     };
-    friend DWORD WINAPI ConnectHandler(LPVOID param);
+    void init() {
+        memset(this->SendBuffer, 0, PacketSize);
+        send_runner_keep = true;
+        connected = false;
+        
+        bytes=0;
+    }
+    friend DWORD WINAPI SConnectHandler(LPVOID param);
     friend DWORD WINAPI SendHandler(LPVOID param);
     ~Sender();
 };
@@ -126,6 +105,32 @@ Sender::~Sender() {
     send_runner_keep = false;
 }
 
+int Sender::_send(int size) {
+
+    memcpy(this->SendBuffer, &this->package, size + HeadSize);
+
+    int rst_byte = size + HeadSize;
+    if (!SimulateDrop()) {
+        SimulateDelay();
+        rst_byte = sendto(this->s, this->SendBuffer, size + HeadSize, 0, (sockaddr*)this->dst_addr, sizeof(*this->dst_addr));
+
+        char error_message[100];
+        if (rst_byte == SOCKET_ERROR) {
+            int error_code = WSAGetLastError();
+            cerr << "sendto failed with error: " << error_code << endl;
+            return rst_byte;
+        }
+
+    }
+    else
+        cout << "\n---------------------------- DROP ---------------------------- " << endl;
+
+
+    cout << "\n------------------------- SEQ: " << this->package.header.seq << " --------------------------\n";
+    print_udp(this->package);
+    this->bytes += size + HeadSize;
+    return rst_byte;
+}
 
 DWORD WINAPI SendHandler(LPVOID param) {
     srand((unsigned)time(NULL));
@@ -174,7 +179,7 @@ DWORD WINAPI SendHandler(LPVOID param) {
             while (recvfrom(sender->s, ReciBuffer, PacketSize, 0, (struct sockaddr*)sender->dst_addr, &dst_addr_len) <= 0)
             {
                 if (clock() - sec_st > MAX_TIME) {
-                    cout << "-------- Time out --------\n" << "Send again: send_status: " << status << " send_seq: " << seq << endl;
+                    cout << "\n-------------------- Time out  -----------------\n" << "Send again: send_status: " << status << " send_seq: " << seq << endl;
                     sender->_send(payload_size);
                     sec_st = clock();
    
@@ -184,7 +189,7 @@ DWORD WINAPI SendHandler(LPVOID param) {
             Udp* dst_package = (Udp*)ReciBuffer;
             if (
                 (dst_package->cmp_cheksum() )
-                && (dst_package->header.get_status() == status)
+                && ( dst_package->header.get_status() == status)
                 && (dst_package->header.get_Ack())
                 )
             {
@@ -244,16 +249,13 @@ DWORD WINAPI SendHandler(LPVOID param) {
 
     cout << "Sending Over\n";
     cout << "Total Length: " << sender->bytes << " bytes\n"<<"Duration: " << double((clock() - send_st)/ CLOCKS_PER_SEC)<<" secs"<<endl;
-    cout << "Speed Rate: " << double( sender->bytes / ((clock() - send_st) / CLOCKS_PER_SEC)) << " Bps"<<endl;
+    
+    if((clock() - send_st) / CLOCKS_PER_SEC)
+        cout << "Speed Rate: " << double( sender->bytes / ((clock() - send_st) / CLOCKS_PER_SEC)) << " Bps"<<endl;
     return 0;
 }
 
-
-/*
-三次挥手状态机
-
-*/
-DWORD WINAPI ConnectHandler(LPVOID param) {
+DWORD WINAPI SConnectHandler(LPVOID param) {
     srand((unsigned)time(NULL));
     char* ReciBuffer = new char[PacketSize];
     
@@ -279,7 +281,7 @@ DWORD WINAPI ConnectHandler(LPVOID param) {
         while (recvfrom(sender->s, ReciBuffer, PacketSize, 0, (struct sockaddr*)sender->dst_addr, &dst_addr_len) <= 0){
             
             if(clock() - sec_st > MAX_TIME) {
-                cout << "-------- Time out --------\n";
+                cout << "\n-------------------- Time out  -----------------\n";
                 sender->_send(0);
                 sec_st = clock();
             }
@@ -321,13 +323,12 @@ DWORD WINAPI ConnectHandler(LPVOID param) {
                 
             }     
     }
+    sender->package.set_flag(0, 0, ACK);
+    sender->package.set_cheksum();
+    sender->_send(0);
     sender->connected = 1;
     return 1;
 }
-
-
-
-
 
 int Sender::get_connection() {
 
