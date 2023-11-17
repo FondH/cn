@@ -1,7 +1,0 @@
-﻿  main.cpp
-G:\大三上\计算机网络\code\StableUdp\StableUdp\Reciver.h(122,10): warning C4101: “error_message”: 未引用的局部变量
-G:\大三上\计算机网络\code\StableUdp\StableUdp\Reciver.h(183,78): warning C4805: “==”: 在操作中将类型“int”与类型“bool”混合不安全
-G:\大三上\计算机网络\code\StableUdp\StableUdp\Sender.h(117,14): warning C4101: “error_message”: 未引用的局部变量
-G:\大三上\计算机网络\code\StableUdp\StableUdp\Sender.h(192,58): warning C4805: “==”: 在操作中将类型“int”与类型“bool”混合不安全
-G:\大三上\计算机网络\code\StableUdp\StableUdp\Sender.h(219,45): warning C4244: “=”: 从“streamsize”转换到“int”，可能丢失数据
-  StableUdp.vcxproj -> G:\大三上\计算机网络\code\StableUdp\x64\Debug\StableUdp.exe
