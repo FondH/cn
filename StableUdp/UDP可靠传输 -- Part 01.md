@@ -52,15 +52,15 @@
 
 > 发送端采取如下状态机方式，每次发送完一组数据开始计时，若超时重新发送；接受端不设计计时。
 
-![image-20231106183148630](rdt3.0.png)
+![image-20231106183148630](Part1\rdt3.0.png)
 
-![image-20231106200810922](rdt2.png)
+![image-20231106200810922](Part1\rdt2.png)
 
 #### 信道的可靠性进一步措施，采取三次握手的过渡？
 
 根据上述分析，新增一个停等机制为基础的握手状态机，挥手成功后进入RDT3.0状态机。
 
-![connect](G:\大三上\计算机网络\code\StableUdp\connect.jpg)
+![connect](Part1\connect.jpg)
 
 ## 程序设计
 
@@ -318,7 +318,7 @@ public:
 
 ##### 发送端
 
-1. 先输入文件名字（同一路径下） 然后挥手成功的信息，SEQ： Num表示当前发送的seq序号，底下的Flag: 1, Checksum: 56765, Sequence: 670, Acknowledgment: 770, Data Size: 16384表示报文信息。![](G:\大三上\计算机网络\code\StableUdp\Sender0.png)
+1. 先输入文件名字（同一路径下） 然后挥手成功的信息，SEQ： Num表示当前发送的seq序号，底下的Flag: 1, Checksum: 56765, Sequence: 670, Acknowledgment: 770, Data Size: 16384表示报文信息。![](Part1\Sender0.png)
 
    
 
@@ -326,23 +326,23 @@ public:
 
 3. 输出`---TIME OUT---`则表示延迟重传，若带有----DROP----的，则是表明发送了丢包导致的超时，否则一般是单纯延迟导致的。
 
-   ![](G:\大三上\计算机网络\code\StableUdp\Sender3.png)
+   ![](Part1\Sender3.png)
 
 4. 最后，发送最后输出吞吐量等数据，输入q停止传输，输入其他继续传输。
 
-![](G:\大三上\计算机网络\code\StableUdp\Sender1.png)
+![](Part1\Sender1.png)
 
 ##### 接受端
 
 1. 同样输入wait时，程序等待握手，握手成功后输出Start Acc the file开始接受文件。
 
-   ![](G:\大三上\计算机网络\code\StableUdp\Reci0.png)
+   ![](Part1\Reci0.png)
 
 2. 中间Reciver' Packetage表示当前发送的包， Sender:表示接受的包
 
 3. 最后输出吞吐率等信息。输入q关闭端口，否则继续等待握手。
 
-   ![](G:\大三上\计算机网络\code\StableUdp\reci1.png)
+   ![](Part1\reci1.png)
 
 ##### 
 
