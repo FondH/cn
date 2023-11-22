@@ -393,26 +393,3 @@ int Reciver::get_connection() {
 }
 
 
-int main() {
-    WSADATA wsaData;
-    int iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
-    if (iResult != NO_ERROR)
-        cout << "WSAStartup failed with error: " << iResult << endl;
-
-
-    Reciver reciver = Reciver();
-    //reciver.get_connection();
-   // reciver.send_rto();
-
-
-    string cin_buffer;
-    int i = 1;
-    while (true) {
-        cout << "No: " << i++ << endl;
-        reciver.init();
-        reciver.get_connection();
-        cin >> cin_buffer;
-        if (cin_buffer == "q")
-            break;
-    }
-}

@@ -1,0 +1,8 @@
+﻿  main.cpp
+G:\大三上\计算机网络\code\StableUdp-reci\StableUdp-reci\UDP.h(256,33): warning C4018: “<”: 有符号/无符号不匹配
+G:\大三上\计算机网络\code\StableUdp-reci\StableUdp-reci\UDP.h(345,20): warning C4018: “<”: 有符号/无符号不匹配
+G:\大三上\计算机网络\code\StableUdp-reci\StableUdp-reci\UDP.h(356,26): warning C4018: “<”: 有符号/无符号不匹配
+G:\大三上\计算机网络\code\StableUdp-reci\StableUdp-reci\reci.h(130,10): warning C4101: “error_message”: 未引用的局部变量
+G:\大三上\计算机网络\code\StableUdp-reci\StableUdp-reci\reci.h(143,23): warning C4018: “<”: 有符号/无符号不匹配
+G:\大三上\计算机网络\code\StableUdp-reci\StableUdp-reci\reci.h(193,78): warning C4805: “==”: 在操作中将类型“int”与类型“bool”混合不安全
+  StableUdp-reci.vcxproj -> G:\大三上\计算机网络\code\StableUdp-reci\Debug\StableUdp-reci.exe

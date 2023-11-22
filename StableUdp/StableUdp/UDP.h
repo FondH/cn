@@ -222,12 +222,13 @@ void print_udp(Udp& u) {
 class pQueue{
 private:
   
-    vector<bool> waitAck;
+    
     int CurrNum;
     int MaxNum;
     friend class Sender;
 
 public:
+    vector<bool> waitAck;
     vector<Udp*> data;
     pQueue(int MaxNum) : MaxNum(MaxNum), CurrNum(0) { }
     bool push(Udp* value) {
@@ -267,32 +268,35 @@ public:
             
     }
     
-    int Setack(const Udp& value){
+
+    // return n 窗口移动n位  0 ack确认，窗口未移动  -1未Ack成功
+    int SRpop(const Udp& value) {
         int indx = 0;
-        while (indx < MaxNum) {
+        while (indx < this->data.size()) {
+            if (indx >= data.size() || indx >= waitAck.size()) 
+                break;
+            //找到value对应下标
             if (value.header.ack == data[indx]->header.seq + 1)
                 break;
             indx++;
         }
+        if (indx >= data.size() || indx >= waitAck.size())
+            return -1;
 
         this->waitAck[indx] = 1;
-        return indx;
-    }
-
-    // return n 窗口移动n位  0 未移动  -1未Ack成功
-    int SRpop( int indx) {
-        
+       // return indx;
         if (!indx) {
-            while (indx < MaxNum && this->waitAck[indx]) {
-                this->pop();
+            while (indx < data.size() && indx < waitAck.size() && this->waitAck[indx]) 
+  
                 indx++;
-            }
+     
+            
+            for (int i = 0;i < indx;i++)
+                this->pop();
             return indx;
         }
-        if (indx == MaxNum)
-            return -1;
-            
-        return 0;
+
+         return 0;
     }
     
     //队头

@@ -8,6 +8,7 @@
 #include <ctime>
 #include<stdlib.h>
 #include <windows.h>
+#include <mutex>
 #include "UDP.h"
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -15,7 +16,7 @@
 using namespace std;
 
 #define MAX_TIME  0.2*CLOCKS_PER_SEC 
-
+#define WindowLen 32
 
 const double LOSS_RATE = 0.05; // 丢包率（0.1 表示10%的丢包率）
 
@@ -54,14 +55,18 @@ private:
     char* FileBuffer;
     
     //GBN
-    volatile int Window = 8;
+    volatile int Window = WindowLen;
     volatile int base = 0;
     volatile int nextseq = 0;
     volatile bool Re = 0;
     volatile clock_t timer;
     pQueue watiBuffer = pQueue(Window);
 
+   
 
+  
+
+    //发送线程开关
     volatile bool send_runner_keep = true;
 
 public:
@@ -86,9 +91,9 @@ public:
     friend DWORD WINAPI SConnectHandler(LPVOID param);
     friend DWORD WINAPI SendHandler(LPVOID param);
     friend DWORD WINAPI GBNReciHandle(LPVOID param);
- 
-  
     friend DWORD WINAPI GBNSendHandle(LPVOID param);
+    friend DWORD WINAPI SRReciHandle(LPVOID param);
+    friend DWORD WINAPI SRSendHandle(LPVOID param);
     ~Sender();
 };
 Sender::Sender() {
@@ -156,7 +161,155 @@ int Sender::_send(Udp * pack, int size) {
     return rst_byte;
 
 }
+
+DWORD WINAPI SRReciHandle(LPVOID param) {
+    srand((unsigned)time(NULL));
+    Sender* s = (Sender*)param;
+    char* ReciBuffer = new char[PacketSize];
+    clock_t sec_st = clock();
+    socklen_t dst_addr_len = sizeof(*s->dst_addr);
+
+    while (true) {
+
+        while (recvfrom(s->s, ReciBuffer, PacketSize, 0, (struct sockaddr*)s->dst_addr, &dst_addr_len) <= 0)
+        {
+            if (clock() - s->timer > 5 * MAX_TIME)
+                //重发
+            {
+                s->timer = clock();
+                s->Re = 1;
+            }
+        }
+        Udp* dst_package = (Udp*)ReciBuffer;
+        if (
+            (dst_package->cmp_cheksum())
+            && (dst_package->header.get_Ack())
+            )
+        {
+            int rst = s->watiBuffer.SRpop(*dst_package);
+            cout << dst_package->header.ack << " buffer: " << s->watiBuffer.data.size()
+                << " rst: " << rst;
+            switch (rst) {
+            case -1:
+                //ACK在窗口范围外
+                cout << endl;
+                print_udp(*dst_package, 3);
+                break;
+            case 0:
+                //ACK可以确认，但第一个包没确认
+                cout<< endl;
+                print_udp(*dst_package, 2);
+                break;
+            default:
+                s->base += rst;
+                cout << " window --> " << rst<<" base " <<s->base<< endl;
+                s->timer = clock();
+                print_udp(*dst_package, 2);
+                break;
+            }
+
+            if (dst_package->header.get_Fin()) {//关闭发送进程
+                s->send_runner_keep = false;
+                break;
+            }
+        }
+
+    }
+    cout << "Listen Thread exit 0" << endl;
+    return 0;
+}
+DWORD WINAPI SRSendHandle(LPVOID param) {
+    srand((unsigned)time(NULL));
+    Sender* s = (Sender*)param;
+    char* iter = s->FileBuffer;
+    streamsize fileSize = s->fileSize;
+    char* end = iter + fileSize;
+
+    string name_size = s->fileName + ":" + to_string(s->fileSize);
+
+    //status ST  ACK FIN  ack seq
+    bool ST = 1;
+    bool END = 0;
+    bool ACK = 0;
+    bool FIN = 0;
+    int ack = -1;
+    int seq = 0;
+    int payloadSize = PayloadSize;
+
+
+    while (s->send_runner_keep) {
+
+
+        int N = s->Window;
+
+        if (FIN || s->Re) {
+            //Recive线程将s->Re置位，对处于队列中的进行发送。
+            vector<Udp*>tmp = s->watiBuffer.data;
+            vector<bool>waitAck = s->watiBuffer.waitAck;
+            int i = 0;
+            for (Udp* p : tmp) {
+                p->header.set_r(1);
+                if (!waitAck[i++])
+                    s->_send(p, p->header.data_size);
+                Sleep(32);
+            }
+
+            //s->watiBuffer.SRpop(0);
+            s->Re = 0;
+            continue;
+        }
+        //常规发送，对窗口内数据进行发送
+        while (s->nextseq < s->base + N) {
+
+            Udp* package = new Udp(ST, ACK, FIN, seq, ack);
+            //根据状态位对package的flag位进行置位
+            if (FIN)
+            {
+                s->watiBuffer.push(package);
+                s->_send(package, 0);
+                // s->send_runner_keep=0;
+                break;
+            }
+
+            else if (ST)
+                package->packet_data(name_size.c_str(), sizeof(name_size));
+
+            else {
+                package->packet_data(iter, payloadSize);
+                iter += PayloadSize;
+            }
+
+            s->watiBuffer.push(package);
+            s->_send(package, payloadSize);
+
+            //下面计时和seq++注意不能换位
+            if (s->base == s->nextseq)
+                s->timer = clock();
+
+            seq++;
+            s->nextseq++;
+
+
+
+            //状态改变
+            if (ST && !FIN)
+                ST = 0;
+
+
+            if (!ST && (iter + PayloadSize) > end) {
+                payloadSize = end - iter;
+                FIN = 1;
+
+            }
+            Sleep(32);
+        }
+    }
+    cout << "GDB Send Thread Finished" << endl;
+    return 0;
+}
+
 DWORD WINAPI GBNReciHandle(LPVOID param) {
+
     srand((unsigned)time(NULL));
     Sender* s = (Sender*)param;
     char* ReciBuffer = new char[PacketSize];
@@ -185,7 +338,8 @@ DWORD WINAPI GBNReciHandle(LPVOID param) {
              (dst_package->cmp_cheksum())
              && (dst_package->header.get_Ack())
              )
-         {
+         {  
+            
              int rst = s->watiBuffer.GBNpop(*dst_package);
              switch (rst) {
              case -1:
@@ -199,6 +353,7 @@ DWORD WINAPI GBNReciHandle(LPVOID param) {
                  print_udp(*dst_package, 2);
                  break;
              }
+          
 
              if (dst_package->header.get_Fin()) {//关闭发送进程
                  s->send_runner_keep = false;
@@ -231,9 +386,7 @@ DWORD WINAPI GBNSendHandle(LPVOID param){
 
     while (s->send_runner_keep) {
 
-    
         int N = s->Window;
-
         if (FIN || s->Re) {
             vector<Udp*>tmp = s->watiBuffer.data;
             for (Udp* p : tmp) {
@@ -241,7 +394,6 @@ DWORD WINAPI GBNSendHandle(LPVOID param){
                 s->_send(p, p->header.data_size);
                 Sleep(32);
             }
-            
             //s->watiBuffer.SRpop(0);
             s->Re = 0;
             continue;
@@ -266,9 +418,7 @@ DWORD WINAPI GBNSendHandle(LPVOID param){
                 iter += PayloadSize;
             }
             
-            s->watiBuffer.push(package);
-
-          
+            s->watiBuffer.push(package); 
             s->_send(package,payloadSize);
 
             if (s->base == s->nextseq)
@@ -515,16 +665,22 @@ int Sender::get_connection() {
     CreateThread(NULL, 0, SConnectHandler, (LPVOID)this, 0, NULL);
 
 
-
-
     while (!this->connected) 
         Sleep(100);
     
     cout << "\n\nstart to send: " << endl;
 
-    CreateThread(NULL, 0, GBNReciHandle, (LPVOID)this, 0, NULL);
-    CreateThread(NULL, 0, GBNSendHandle, (LPVOID)this, 0, NULL);
+    CreateThread(NULL, 0, SRReciHandle, (LPVOID)this, 0, NULL);
+    clock_t send_st = clock();
+    CreateThread(NULL, 0, SRSendHandle, (LPVOID)this, 0, NULL);
 
 
+    while (this->send_runner_keep) 
+        Sleep(100);
+    
+    cout << "Total Length: " << this->bytes << " bytes\n" << "Duration: " << double((clock() - send_st) / CLOCKS_PER_SEC) << " secs" << endl;
+
+    if ((clock() - send_st) / CLOCKS_PER_SEC)
+        cout << "Speed Rate: " << double(this->bytes / ((clock() - send_st) / CLOCKS_PER_SEC)) << " Bps" << endl;
     return 1;
 }
