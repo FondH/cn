@@ -14,7 +14,7 @@ using namespace std;
 
 int main(){
 
-    string filename = "helloworld.txt";
+    string filename = "3.jpg";
 
     WSADATA wsaData;
     int iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
@@ -27,20 +27,23 @@ int main(){
     //sender.GetFile(filename);
    // sender.get_connection();
    
+    sender.GetFile(filename);
+   // sender.init();
+    sender.get_connection();
+
 
     string a;
     while (true) {
-        cout << "input filename\n";
+       /* cout << "input filename\n";
         cin >> filename;
         sender.GetFile(filename);
-        sender.init();
-        sender.get_connection();
-
+        sender.init();*/
+       // sender.get_connection();
+        
         cout << "q to exit\n";
         cin >> cin_buffer;
         if (cin_buffer == "q")
             break;
     }
-
-
+    
 }

@@ -1,0 +1,9 @@
+﻿  main.cpp
+G:\大三上\计算机网络\code\StableUdp\StableUdp\UDP.h(257,34): warning C4018: “<”: 有符号/无符号不匹配
+G:\大三上\计算机网络\code\StableUdp\StableUdp\Reciver.h(123,10): warning C4101: “error_message”: 未引用的局部变量
+G:\大三上\计算机网络\code\StableUdp\StableUdp\Reciver.h(184,78): warning C4805: “==”: 在操作中将类型“int”与类型“bool”混合不安全
+G:\大三上\计算机网络\code\StableUdp\StableUdp\Sender.h(139,14): warning C4101: “error_message”: 未引用的局部变量
+G:\大三上\计算机网络\code\StableUdp\StableUdp\Sender.h(288,35): warning C4244: “=”: 从“__int64”转换到“int”，可能丢失数据
+G:\大三上\计算机网络\code\StableUdp\StableUdp\Sender.h(357,58): warning C4805: “==”: 在操作中将类型“int”与类型“bool”混合不安全
+G:\大三上\计算机网络\code\StableUdp\StableUdp\Sender.h(384,45): warning C4244: “=”: 从“streamsize”转换到“int”，可能丢失数据
+  StableUdp.vcxproj -> G:\大三上\计算机网络\code\StableUdp\x64\Debug\StableUdp.exe
