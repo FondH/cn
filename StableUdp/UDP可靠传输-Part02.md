@@ -20,9 +20,9 @@
 
 状态机参考课程中：
 
-![image-20231123182612403](G:\大三上\计算机网络\code\StableUdp\Part2\Sender.png)
+![image-20231123182612403](Part2\Sender.png)
 
-![image-20231123182743593](G:\大三上\计算机网络\code\StableUdp\Part2\Reci.png)
+![image-20231123182743593](Part2\Reci.png)
 
 ### 报文设计
 
@@ -93,7 +93,7 @@
    3. **接受线程**：接受ACK包，将**对应**的存在缓存区内**待确认**的包进行确认，注意确认机制是累积确认，即这个ACK确认的是对应缓存区内包之前的所有数据;另外，它负责超时，之后通知发送线程进行重发
 
       ~~~c++
-    //重传
+       //重传
       while (recvfrom(s->s, ReciBuffer, PacketSize, 0, (struct sockaddr*)s->dst_addr, &dst_addr_len) <= 0)
               {
                   if (clock() - s->timer > 10*MAX_TIME)
@@ -207,14 +207,14 @@
 - `[INVALID]` 则是累积确认中，`n+1`的`ack`已经接受，但是此时 `n` 的`ack`才到达，这个 `n` 就是`INVALID`。
 - 此外还有窗口挪动的信息，`[window] -- > n base: x` ，`n`是窗口移动的位数，`x`是此时窗口的左区间
 
-![image-20231123184615599](G:\大三上\计算机网络\code\StableUdp\Part2\sender-log0.png)
+![image-20231123184615599](Part2\sender-log0.png)
 
 最后计算、输出吞吐率相关指标
 
-![image-20231123184740332](G:\大三上\计算机网络\code\StableUdp\Part2\sender-log1)
+![image-20231123184740332](Part2\sender-log1)
 
 **接收端**由于窗口大小为1，不存在窗口改变。输出的日志信息中如下，它输出的报文是上述发送端的子集。
 
-![image-20231123183651032](G:\大三上\计算机网络\code\StableUdp\Part2\reci-log0.png)
+![image-20231123183651032](Part2\reci-log0.png)
 
-![image-20231123184821698](G:\大三上\计算机网络\code\StableUdp\Part2\reci-log1)
+![image-20231123184821698](Part2\reci-log1)
