@@ -17,8 +17,8 @@ using namespace std;
 
 #define MAX_TIME  0.2*CLOCKS_PER_SEC 
 #define WindowLen 32
-
-const double LOSS_RATE = 0.05; // 丢包率（0.1 表示10%的丢包率）
+#define TWICE_GAP 100
+const double LOSS_RATE = 0; // 丢包率（0.1 表示10%的丢包率）
 
 
 void SimulateDelay() {
@@ -74,7 +74,7 @@ public:
     Sender();
     int _send(Udp * pack, int payload_size);
     int _send(int size);  
-    int get_connection();
+    int get_connection(int type);
     void print_info() { print_udp(*package); }
 
     void GetFile(string name) { 
@@ -126,8 +126,7 @@ Sender::~Sender() {
 }
 
 int Sender::_send(int size) {
-    return this->_send(this->package, size);
-    
+    return this->_send(this->package, size);  
 }
 int Sender::_send(Udp * pack, int size) {
     char* buffer = new char[size + HeadSize];
@@ -251,7 +250,7 @@ DWORD WINAPI SRSendHandle(LPVOID param) {
                 p->header.set_r(1);
                 if (!waitAck[i++])
                     s->_send(p, p->header.data_size);
-                Sleep(32);
+                Sleep(2);
             }
 
             //s->watiBuffer.SRpop(0);
@@ -289,8 +288,6 @@ DWORD WINAPI SRSendHandle(LPVOID param) {
             seq++;
             s->nextseq++;
 
-
-
             //状态改变
             if (ST && !FIN)
                 ST = 0;
@@ -301,7 +298,7 @@ DWORD WINAPI SRSendHandle(LPVOID param) {
                 FIN = 1;
 
             }
-            Sleep(32);
+            Sleep(2);
         }
     }
     cout << "GDB Send Thread Finished" << endl;
@@ -319,16 +316,11 @@ DWORD WINAPI GBNReciHandle(LPVOID param) {
     while (true) {
         while (recvfrom(s->s, ReciBuffer, PacketSize, 0, (struct sockaddr*)s->dst_addr, &dst_addr_len) <= 0)
         {
-            if (clock() - s->timer > 10*MAX_TIME)
+            if (clock() - s->timer > MAX_TIME)
                 //重发
             {
                 s->timer = clock();
                 s->Re = 1;
-               /* for (Udp* package : s->watiBuffer.data) {
-                    package->header.set_r(1);
-                    s->_send(package, package->header.data_size + HeadSize);
-                    Sleep(100);
-                }*/
             }
         }
          Udp* dst_package = (Udp*)ReciBuffer;
@@ -349,6 +341,7 @@ DWORD WINAPI GBNReciHandle(LPVOID param) {
              default :
                  //存在发送端ACK丢失或者延迟
                  s->base+=rst;
+                 cout << "[window] -- > " << rst << " base: "<<s->base<<endl;
                  s->timer = clock();
                  print_udp(*dst_package, 2);
                  break;
@@ -392,7 +385,7 @@ DWORD WINAPI GBNSendHandle(LPVOID param){
             for (Udp* p : tmp) {
                 p->header.set_r(1);
                 s->_send(p, p->header.data_size);
-                Sleep(32);
+                Sleep(TWICE_GAP);
             }
             //s->watiBuffer.SRpop(0);
             s->Re = 0;
@@ -439,7 +432,7 @@ DWORD WINAPI GBNSendHandle(LPVOID param){
                 FIN = 1;
 
             }
-            Sleep(32);
+            Sleep(TWICE_GAP);
         }
     }
     cout << "GDB Send Thread Finished" << endl;
@@ -563,11 +556,7 @@ DWORD WINAPI SendHandler(LPVOID param) {
     }
 
     cout << "Sending Over\n";
-    cout << "Total Length: " << sender->bytes << " bytes\n"<<"Duration: " << double((clock() - send_st)/ CLOCKS_PER_SEC)<<" secs"<<endl;
-    
-    if((clock() - send_st) / CLOCKS_PER_SEC)
-        cout << "Speed Rate: " << double( sender->bytes / ((clock() - send_st) / CLOCKS_PER_SEC)) << " Bps"<<endl;
-    return 0;
+     return 0;
 }
 DWORD WINAPI SConnectHandler(LPVOID param) {
     srand((unsigned)time(NULL));
@@ -651,7 +640,7 @@ DWORD WINAPI SConnectHandler(LPVOID param) {
     return 1;
 }
 
-int Sender::get_connection() {
+int Sender::get_connection(int type) {
 
     this->dst_addr->sin_family = AF_INET;
     this->dst_addr->sin_port = htons(8999);
@@ -668,19 +657,43 @@ int Sender::get_connection() {
     while (!this->connected) 
         Sleep(100);
     
-    cout << "\n\nstart to send: " << endl;
+    
 
-    CreateThread(NULL, 0, SRReciHandle, (LPVOID)this, 0, NULL);
-    clock_t send_st = clock();
-    CreateThread(NULL, 0, SRSendHandle, (LPVOID)this, 0, NULL);
+    clock_t send_st ;
+    switch (type)
+    {
+    case 1:
+        cout << "\nDEFAULT SENDING " << endl;
+        CreateThread(NULL, 0, SendHandler, (LPVOID)this, 0, NULL);
+        send_st = clock();
+        break;
+
+    case 2:
+        cout << "\nGBN SENDING " << endl;
+        CreateThread(NULL, 0, GBNReciHandle, (LPVOID)this, 0, NULL);
+        send_st = clock();
+        CreateThread(NULL, 0, GBNSendHandle, (LPVOID)this, 0, NULL);
+        break;
+    default:
+        cout << "\nSR SENDING " << endl;
+        CreateThread(NULL, 0, SRReciHandle, (LPVOID)this, 0, NULL);
+        send_st = clock();
+        CreateThread(NULL, 0, SRSendHandle, (LPVOID)this, 0, NULL);
+        break;
+    }
 
 
     while (this->send_runner_keep) 
         Sleep(100);
     
-    cout << "Total Length: " << this->bytes << " bytes\n" << "Duration: " << double((clock() - send_st) / CLOCKS_PER_SEC) << " secs" << endl;
+    SetConsoleTextAttribute(hConsole, BACKGROUND_BLUE | BACKGROUND_GREEN);
+    cout << "\n[SYS STATUS] " << endl;
+    SetConsoleTextAttribute(hConsole, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
 
+   cout << "[TOTAL BYTES] " << this->bytes  << " bs\n" 
+         << "[DURATION] " << double(clock() - send_st) / CLOCKS_PER_SEC << " s" 
+         << endl;
     if ((clock() - send_st) / CLOCKS_PER_SEC)
-        cout << "Speed Rate: " << double(this->bytes / ((clock() - send_st) / CLOCKS_PER_SEC)) << " Bps" << endl;
+        cout << "[SPEED RATE] " << double(this->bytes / ((clock() - send_st) / CLOCKS_PER_SEC)) << " Bps\n";
     return 1;
 }
