@@ -20,9 +20,9 @@
 
 状态机参考课程中：
 
-![image-20231123182612403](Part2\Sender.png)
+![image-20231123182612403](Part2/Sender.png)
 
-![image-20231123182743593](Part2\Reci.png)
+![image-20231123182743593](Part2/Reci.png)
 
 ### 报文设计
 
@@ -207,14 +207,14 @@
 - `[INVALID]` 则是累积确认中，`n+1`的`ack`已经接受，但是此时 `n` 的`ack`才到达，这个 `n` 就是`INVALID`。
 - 此外还有窗口挪动的信息，`[window] -- > n base: x` ，`n`是窗口移动的位数，`x`是此时窗口的左区间
 
-![image-20231123184615599](Part2\sender-log0.png)
+![image-20231123184615599](Part2/sender-log0.png)
 
 最后计算、输出吞吐率相关指标
 
-![image-20231123184740332](Part2\sender-log1)
+![image-20231123184740332](Part2/sender-log1)
 
 **接收端**由于窗口大小为1，不存在窗口改变。输出的日志信息中如下，它输出的报文是上述发送端的子集。
 
-![image-20231123183651032](Part2\reci-log0.png)
+![image-20231123183651032](Part2/reci-log0.png)
 
-![image-20231123184821698](Part2\reci-log1)
+![image-20231123184821698](Part2/reci-log1)
