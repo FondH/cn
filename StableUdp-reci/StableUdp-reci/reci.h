@@ -18,15 +18,16 @@
 
 using namespace std;
 
-
 const int MAX_DELAY_MS = 300; // 最大延迟时间（毫秒）
 const double MAX_DELAY_RATE = 0.02;
+const double DEFAULT_DELAY_Time= 50;
 
 
 void SimulateDelay(bool IsDelay) {
     if (IsDelay)
         Sleep(MAX_DELAY_MS);
-
+    else
+        Sleep(DEFAULT_DELAY_Time);
 }
 
 
@@ -480,7 +481,7 @@ int Reciver::get_connection() {
     ioctlsocket(this->s, FIONBIO, &mode);
 
     cout << "\n\nstart to reci !" << endl;
-    reci_runner_handle = CreateThread(NULL, 0, SRReciHandler, (LPVOID)this, 0, NULL);
+    reci_runner_handle = CreateThread(NULL, 0, GBNReciHandler, (LPVOID)this, 0, NULL);
 
     return 1;
 }

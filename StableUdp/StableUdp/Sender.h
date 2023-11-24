@@ -18,7 +18,7 @@ using namespace std;
 #define MAX_TIME  0.2*CLOCKS_PER_SEC 
 #define WindowLen 32
 #define TWICE_GAP 100
-const double LOSS_RATE = 0; // 丢包率（0.1 表示10%的丢包率）
+const double LOSS_RATE = 0.05; // 丢包率（0.1 表示10%的丢包率）
 
 
 void SimulateDelay() {

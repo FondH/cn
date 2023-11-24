@@ -326,7 +326,7 @@ public:
         if (CurrNum >= MaxNum)
             return 1;
 
-        auto it = std::lower_bound(data.begin(), data.end(), value,
+        auto it = lower_bound(data.begin(), data.end(), value,
             [](const Udp* a, const Udp* b) {
             return a->header.seq < b->header.seq;
         });
