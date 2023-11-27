@@ -1,10 +1,14 @@
 学号：2111252  姓名：李佳豪 
 
-代码链接:
+代码链接:https://github.com/FondH/cn/tree/StableUdp-Part2
 
 ## UDP可靠传输-Part02
 
 在实验3-1的基础上，将停等机制改成基于滑动窗口的流量控制机制，发送窗口和接收窗口采用相同大小，支持累积确认，完成给定测试文件的传输。
+
+[TOC]
+
+
 
 ### GBN实验原理要点
 
@@ -56,232 +60,234 @@
 
 ### 程序设计
 
-1. **发送端**  异步的发送和接受
+#### **发送端**  
 
-   1. `Sender`类成员
+异步的发送和接受
 
-          Sender {
-          //GBN
-          volatile int Window = 8;    //窗口大小
-          volatile int base = 0;		//窗口的左端点，是全局变量，由发送线程和接受线程共享
-          volatile int nextseq = 0;	//即将发送的数据序号
-          volatile bool Re = 0;		//一个标记位，接收线程得知超时时候置位，让发送线程重传
-          volatile clock_t timer;		
-          pQueue watiBuffer = pQueue(Window); //窗口分为两部分（已发送和未发生，将已经发送的push进队列
+1. `Sender`类成员
 
-   2. **窗口缓存区** 发送区窗口本质是由`sender->base+Window`决定，而为了重发已经发送的窗口内的数据包，维护一个队列将这些数据包记录，便于将`ack`对应的数据包之前的全部数据包全部pop。下面展示核心函数`GBNpop`，在接受线程调用，若返回-1，则是表示当前接受的`ACK`没有在缓存区匹配的；若返回`n(n>0)`，表示匹配到第n个数据包，并且已经将这`n`个数据包`pop`出去。
+       Sender {
+       //GBN
+       volatile int Window = 8;    //窗口大小
+       volatile int base = 0;		//窗口的左端点，是全局变量，由发送线程和接受线程共享
+       volatile int nextseq = 0;	//即将发送的数据序号
+       volatile bool Re = 0;		//一个标记位，接收线程得知超时时候置位，让发送线程重传
+       volatile clock_t timer;		
+       pQueue watiBuffer = pQueue(Window); //窗口分为两部分（已发送和未发生，将已经发送的push进队列
 
-      ~~~c++
-      class pQueue{ 
-      public:
-          vector<Udp*> data;
-      
-          ... ...
-          //return  -1 ACK小于窗口内最小值 >1 ACK大于循环第一个元素pop
-          int GBNpop(const Udp& value){
-              int va = value.header.ack;
-              if ( this->empty() || va < (this->front()->header.seq + 1) )
-                  return -1;
-            //注: va大于front,表示回复的ack丢失或者延迟，但是接受方已经收到，可以累计确认
-              else {
-                  int rst = va - this->front()->header.seq;
-                  int n = rst;
-                  while (n--)
-                      this->pop();
-                  return rst;
-              }    
-          }
-      };
-      ~~~
+2. **窗口缓存区** 发送区窗口本质是由`sender->base+Window`决定，而为了重发已经发送的窗口内的数据包，维护一个队列将这些数据包记录，便于将`ack`对应的数据包之前的全部数据包全部pop。下面展示核心函数`GBNpop`，在接受线程调用，若返回-1，则是表示当前接受的`ACK`没有在缓存区匹配的；若返回`n(n>0)`，表示匹配到第n个数据包，并且已经将这`n`个数据包`pop`出去。
 
-      
-
-   3. **发送线程**：将窗口内的数据按照序列发送，之后将其放入一个缓存区等待被`ACK`；同时还需要在超时重传时对超时的包进行重新发送；此外，关于`ST`、`END`的作用详细见上一个实验：`Sender`发送的第一个包包含文件的描述信息，设为`ST`包，发送的最后一个包是`Fin`包，既包含文件最后一部分，也意味着**二次挥手的开始**；最后关于`ack`和`seq`的设置，`ack`本次实验无用，而`seq`从0开始递增，使得让每一个数据包有了**唯一编码**。
-
-      ~~~c++
-      DWORD WINAPI GBNSendHandle(LPVOID param){
-      	... ... 
-          //status ST  ACK FIN  ack seq
-          bool ST = 1;
-          bool ACK = 0;
-          bool FIN = 0;
-          int ack = -1;
-          int seq = 0;
-          int payloadSize = PayloadSize;
-          while (s->send_runner_keep) {
-              //动态设置当前Window大小
-              int N = s->Window;
-      	    //根据Re变量得知现在是否应该重发
-              if (FIN || s->Re) {
-                  vector<Udp*>tmp = s->watiBuffer.data;
-                  for (Udp* p : tmp) {
-                      p->header.set_r(1);
-                      s->_send(p, p->header.data_size);
-                      Sleep(32);
-                  }
-                  s->Re = 0;
-                  continue;
-              }
-              while (s->nextseq < s->base + N) {
-                  //发送
-                  Udp *package = new Udp(ST, ACK, FIN, seq, ack); 
-                  if (FIN) {
-                      s->watiBuffer.push(package);
-                      s->_send(package, 0);
-                     // s->send_runner_keep=0;
-                      break;
-                  }
-      
-                  else if (ST)
-                      package->packet_data(name_size.c_str(), sizeof(name_size));
-      
-                  else {
-                      package->packet_data(iter, payloadSize);
-                      iter += PayloadSize;
-                  }
-                  //将已发送数据入队列
-                  s->watiBuffer.push(package);
-                  s->_send(package,payloadSize);
-      
-                  if (s->base == s->nextseq)
-                      s->timer = clock();
-      
-                  seq++;
-                  s->nextseq++;
-                  
-                  //状态改变
-                  if (ST && !FIN) 
-                      ST = 0;
-                  if (!ST && (iter + PayloadSize) > end) {
-                      payloadSize = end - iter;
-                      FIN = 1;
-                  }
-                  Sleep(32);
-              }
-          }
-          cout << "GDB Send Thread Finished" << endl;
-          return 0;
-      }
-      ~~~
-
-      
-
-   4. **接受线程**：接受ACK包，将**对应**的存在缓存区内**待确认**的包进行确认，注意确认机制是累积确认，即这个ACK确认的是对应缓存区内包之前的所有数据;另外，它负责超时，之后通知发送线程进行重发
-
-      ~~~c++
-      DWORD WINAPI GBNReciHandle(LPVOID param) {
-          ... ... 	
-          while (true) {
-              while (recvfrom(s->s, ReciBuffer, PacketSize, 0, (struct sockaddr*)s->dst_addr, 		 	   &dst_addr_len) <= 0) {
-                  if (clock() - s->timer > 10*MAX_TIME) { //重发
-                      s->timer = clock();
-                      s->Re = 1;
-                  }
-              }
-               Udp* dst_package = (Udp*)ReciBuffer;
-               if (
-                   (dst_package->cmp_cheksum())
-                   && (dst_package->header.get_Ack())
-                   )
-               {
-                   int rst = s->watiBuffer.GBNpop(*dst_package);
-                   switch (rst) {
-                   case -1:
-                       //重复接受ACK
-                      print_udp(*dst_package, 3);
-                      break;
-                   default :
-                       //存在发送端ACK丢失或者延迟
-                       s->base+=rst;
-                       cout << " window --> " << rst<<" base " <<s->base<< endl;
-                       s->timer = clock();
-                       print_udp(*dst_package, 2);
-                       break;
-                   }
-                   if (dst_package->header.get_Fin()) {//关闭发送进程
-                       s->send_runner_keep = false;
-                       break;
-                   }
-               }
-              
-          }
-          cout << "Listen Thread exit 0"<<endl;
-          return 0;
-      }
-      ~~~
-
-      ​	
-
-      
-
-2. 接收端
-
-   只需要根据接受到的数据包，进行判断，因此开一个线程接受，再结合状态控制进行发送。基本逻辑和**停等机制下的接收端相同**，差异只在只有`expect_ack`的机制与收到非法数据包是、重新发送`expect_ack`包。
-
-   - 首先有一组状态决定当前回应报文的Header ；其次声明指向文件的`iter = reci->FileBuffer`，用于将接受的报文写入。
-
-     ~~~c++
-     bool fin = 0;
-     bool st = 1;
-     //bool RE = 0;
-     int expect_ack = 1;
-     int seq = 0;
-     char* iter = reci->FileBuffer;
-     ~~~
-
-   - 若通过校验和、判断接受的ack是否是自己想要的，若不是，则重新发送自己`expect_ack`的数据包;否则根据当前状态和`expect_ack`发送ACK
-
-     ~~~c++
-         while (reci->reci_runner_keep && !fin) {
-             if (fin || recvfrom(reci->s, buffer, PacketSize, 0, (sockaddr*)reci->send_addr, &send_addr_size) <= 0)
-                 continue;
-             //接受到数据包
-             Udp* dst_package = (Udp*)buffer;
-             print_udp(*dst_package, 1);
-     		//校验和检验 seq检验是否连续 否则置为r（重发位）
-             if (!dst_package->cmp_cheksum() || !(dst_package->header.seq + 1 == expect_ack))
-             {
-                 //cout << "---------- Lost or CheckSum error ---------\n" << endl;
-                 reci->package->header.set_r(1);
-                 reci->ThreadSend();
-                 reci->package->header.set_r(0);
-                 continue;
-             }
-             // 通过校验和  
-     
-             if (dst_package->header.get_st())
-                 reci->InforBuffer += dst_package->payload;
-     
-             else {
-                 st = 0;
-                 memcpy(iter, dst_package->payload, dst_package->header.data_size);
-                 iter += dst_package->header.data_size;
-             }
-     
-             if (dst_package->header.get_Fin())
-     	  //fin报文收到后，则完全收到了，回复一个fin报文，让sender结束。即挥手第二次
-                 fin = 1;
-     
-             reci->package->header.set_Ack(1);
-             reci->package->header.set_St(st);
-             reci->package->header.set_Fin(fin);
-             reci->package->header.seq = seq++;
-             reci->package->header.ack = expect_ack++;
-             reci->ThreadSend();
-     
-         }
-     
-         Sleep(100);
-         cout << "Thread exit... \nTotal Length: " << reci->bytes << " bytes\n" << "Duration: " << (double)((clock() - send_st) / CLOCKS_PER_SEC) << " secs" << endl;
-         cout << "Speed Rate: " << (double)reci->bytes / ((clock() - send_st) / CLOCKS_PER_SEC) << " Bps" << endl;
-         reci->to_file();
-         return 1;
-     }
-     ~~~
-
-     
+   ~~~c++
+   class pQueue{ 
+   public:
+       vector<Udp*> data;
+   
+       ... ...
+       //return  -1 ACK小于窗口内最小值 >1 ACK大于循环第一个元素pop
+       int GBNpop(const Udp& value){
+           int va = value.header.ack;
+           if ( this->empty() || va < (this->front()->header.seq + 1) )
+               return -1;
+         //注: va大于front,表示回复的ack丢失或者延迟，但是接受方已经收到，可以累计确认
+           else {
+               int rst = va - this->front()->header.seq;
+               int n = rst;
+               while (n--)
+                   this->pop();
+               return rst;
+           }    
+       }
+   };
+   ~~~
 
    
+
+3. **发送线程**将窗口内的数据按照序列发送，之后将其放入一个缓存区等待被`ACK`；同时还需要在超时重传时对超时的包进行重新发送；此外，关于`ST`、`END`的作用详细见上一个实验：`Sender`发送的第一个包包含文件的描述信息，设为`ST`包，发送的最后一个包是`Fin`包，既包含文件最后一部分，也意味着**二次挥手的开始**；最后关于`ack`和`seq`的设置，`ack`本次实验无用，而`seq`从0开始递增，使得让每一个数据包有了**唯一编码**。
+
+   ~~~c++
+   DWORD WINAPI GBNSendHandle(LPVOID param){
+   	... ... 
+       //status ST  ACK FIN  ack seq
+       bool ST = 1;
+       bool ACK = 0;
+       bool FIN = 0;
+       int ack = -1;
+       int seq = 0;
+       int payloadSize = PayloadSize;
+       while (s->send_runner_keep) {
+           //动态设置当前Window大小
+           int N = s->Window;
+   	    //根据Re变量得知现在是否应该重发
+           if (FIN || s->Re) {
+               vector<Udp*>tmp = s->watiBuffer.data;
+               for (Udp* p : tmp) {
+                   p->header.set_r(1);
+                   s->_send(p, p->header.data_size);
+                   Sleep(32);
+               }
+               s->Re = 0;
+               continue;
+           }
+           while (s->nextseq < s->base + N) {
+               //发送
+               Udp *package = new Udp(ST, ACK, FIN, seq, ack); 
+               if (FIN) {
+                   s->watiBuffer.push(package);
+                   s->_send(package, 0);
+                  // s->send_runner_keep=0;
+                   break;
+               }
+   
+               else if (ST)
+                   package->packet_data(name_size.c_str(), sizeof(name_size));
+   
+               else {
+                   package->packet_data(iter, payloadSize);
+                   iter += PayloadSize;
+               }
+               //将已发送数据入队列
+               s->watiBuffer.push(package);
+               s->_send(package,payloadSize);
+   
+               if (s->base == s->nextseq)
+                   s->timer = clock();
+   
+               seq++;
+               s->nextseq++;
+               
+               //状态改变
+               if (ST && !FIN) 
+                   ST = 0;
+               if (!ST && (iter + PayloadSize) > end) {
+                   payloadSize = end - iter;
+                   FIN = 1;
+               }
+               Sleep(32);
+           }
+       }
+       cout << "GDB Send Thread Finished" << endl;
+       return 0;
+   }
+   ~~~
+
+   
+
+4. **接受线程**：接受ACK包，将**对应**的存在缓存区内**待确认**的包进行确认，注意确认机制是累积确认，即这个ACK确认的是对应缓存区内包之前的所有数据;另外，它负责超时，之后通知发送线程进行重发
+
+   ~~~c++
+   DWORD WINAPI GBNReciHandle(LPVOID param) {
+       ... ... 	
+       while (true) {
+           while (recvfrom(s->s, ReciBuffer, PacketSize, 0, (struct sockaddr*)s->dst_addr, 		 	   &dst_addr_len) <= 0) {
+               if (clock() - s->timer > 10*MAX_TIME) { //重发
+                   s->timer = clock();
+                   s->Re = 1;
+               }
+           }
+            Udp* dst_package = (Udp*)ReciBuffer;
+            if (
+                (dst_package->cmp_cheksum())
+                && (dst_package->header.get_Ack())
+                )
+            {
+                int rst = s->watiBuffer.GBNpop(*dst_package);
+                switch (rst) {
+                case -1:
+                    //重复接受ACK
+                   print_udp(*dst_package, 3);
+                   break;
+                default :
+                    //存在发送端ACK丢失或者延迟
+                    s->base+=rst;
+                    cout << " window --> " << rst<<" base " <<s->base<< endl;
+                    s->timer = clock();
+                    print_udp(*dst_package, 2);
+                    break;
+                }
+                if (dst_package->header.get_Fin()) {//关闭发送进程
+                    s->send_runner_keep = false;
+                    break;
+                }
+            }
+           
+       }
+       cout << "Listen Thread exit 0"<<endl;
+       return 0;
+   }
+   ~~~
+
+   ​	
+
+   
+
+#### 接收端
+
+只需要根据接受到的数据包，进行判断，因此开一个线程接受，再结合状态控制进行发送。基本逻辑和**停等机制下的接收端相同**，差异只在只有`expect_ack`的机制与收到非法数据包是、重新发送`expect_ack`包。
+
+- 首先有一组状态决定当前回应报文的Header ；其次声明指向文件的`iter = reci->FileBuffer`，用于将接受的报文写入。
+
+  ~~~c++
+  bool fin = 0;
+  bool st = 1;
+  //bool RE = 0;
+  int expect_ack = 1;
+  int seq = 0;
+  char* iter = reci->FileBuffer;
+  ~~~
+
+- 若通过校验和、判断接受的ack是否是自己想要的，若不是，则重新发送自己`expect_ack`的数据包;否则根据当前状态和`expect_ack`发送ACK
+
+  ~~~c++
+      while (reci->reci_runner_keep && !fin) {
+          if (fin || recvfrom(reci->s, buffer, PacketSize, 0, (sockaddr*)reci->send_addr, &send_addr_size) <= 0)
+              continue;
+          //接受到数据包
+          Udp* dst_package = (Udp*)buffer;
+          print_udp(*dst_package, 1);
+  		//校验和检验 seq检验是否连续 否则置为r（重发位）
+          if (!dst_package->cmp_cheksum() || !(dst_package->header.seq + 1 == expect_ack))
+          {
+              //cout << "---------- Lost or CheckSum error ---------\n" << endl;
+              reci->package->header.set_r(1);
+              reci->ThreadSend();
+              reci->package->header.set_r(0);
+              continue;
+          }
+          // 通过校验和  
+  
+          if (dst_package->header.get_st())
+              reci->InforBuffer += dst_package->payload;
+  
+          else {
+              st = 0;
+              memcpy(iter, dst_package->payload, dst_package->header.data_size);
+              iter += dst_package->header.data_size;
+          }
+  
+          if (dst_package->header.get_Fin())
+  	  //fin报文收到后，则完全收到了，回复一个fin报文，让sender结束。即挥手第二次
+              fin = 1;
+  
+          reci->package->header.set_Ack(1);
+          reci->package->header.set_St(st);
+          reci->package->header.set_Fin(fin);
+          reci->package->header.seq = seq++;
+          reci->package->header.ack = expect_ack++;
+          reci->ThreadSend();
+  
+      }
+  
+      Sleep(100);
+      cout << "Thread exit... \nTotal Length: " << reci->bytes << " bytes\n" << "Duration: " << (double)((clock() - send_st) / CLOCKS_PER_SEC) << " secs" << endl;
+      cout << "Speed Rate: " << (double)reci->bytes / ((clock() - send_st) / CLOCKS_PER_SEC) << " Bps" << endl;
+      reci->to_file();
+      return 1;
+  }
+  ~~~
+
+  
+
+
 
 ### 			实验结果
 
@@ -325,13 +331,13 @@
 
 
 
-### 相关思考
+### 失序、效率思考
 
-##### 失序问题
+#### 失序问题
 
 在上一次停等实验中，一旦中间链路导致的延迟过大，配合发送端的重传机制导致了包失序问题，而这次实验，接收端`expect_ack`机制，强制接受连续的数据包，保证了接受数据包不存在失序，但也同时导致时间的浪费，如下讨论：
 
-##### 效率问题 
+#### 效率问题 
 
 首先有如下结论，当链路层传输的时延**接近**接收端发送端两次发送的间隔，且**无丢包**现象，GBN机制退化成停等(只是不再是0/1状态的转移)，因为发送端每发一个包，立即接受ACK，窗口右移动1，再次发送下一个包....最后使得发送缓存区队列最多一个元素。
 
@@ -339,4 +345,4 @@
 
 当仅加入波动性时延（即每一个数据包对应的时延是不一定的），会导致`Sender`接受`ack=x`,但是x-1、甚至x-n都没收到，但由于累积确认的机制，发送端此时跳过了对`x-1`至于`x-n`的接受，这种角度**GBN似乎提升了效率**
 
-因此有一个粗浅的结论，时延波动性大、丢包率较低的网络参数下、窗口长度小的情况下，GBN是优化的，否则会导致占用大量宽带，反而导致效率更低。而第四次实验将会有更充分的测试shu'ju
+因此有一个粗浅的结论，时延波动性大、丢包率较低的网络参数下、窗口长度小的情况下，GBN是优化的，否则会导致占用大量宽带，反而导致效率更低。而第四次实验将会有更充分的测试数据进行验证。
