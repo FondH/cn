@@ -1,3 +1,0 @@
-﻿  NetMesTrans2.cpp
-G:\大三上\计算机网络\code\Chat_room\NetMesTrans2\NetMesTrans2\NetMesTrans2.cpp(158,62): warning C4267: “初始化”: 从“size_t”转换到“int”，可能丢失数据
-  NetMesTrans2.vcxproj -> G:\大三上\计算机网络\code\Chat_room\NetMesTrans2\x64\Debug\NetMesTrans2.exe

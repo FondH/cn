@@ -1,8 +1,0 @@
-﻿  server.cpp
-G:\大三上\计算机网络\code\Chat_room\NetMessageTans\NetMessageTans\Server.h(50,67): warning C4267: “参数”: 从“size_t”转换到“int”，可能丢失数据
-G:\大三上\计算机网络\code\Chat_room\NetMessageTans\NetMessageTans\Server.h(88,49): warning C4267: “参数”: 从“size_t”转换到“int”，可能丢失数据
-  正在生成代码
-  Previous IPDB not found, fall back to full compilation.
-  All 374 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
-  已完成代码的生成
-  NetMessageTans.vcxproj -> G:\大三上\计算机网络\code\Chat_room\NetMessageTans\x64\Release\NetMessageTans.exe
