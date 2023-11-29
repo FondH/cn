@@ -13,13 +13,12 @@
 #pragma comment(lib, "Ws2_32.lib")
 
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
+#define MAX_TIME  0.2*CLOCKS_PER_SEC 
+#define WindowLen 16
+#define TWICE_GAP 32
 using namespace std;
 
-#define MAX_TIME  0.2*CLOCKS_PER_SEC 
-#define WindowLen 32
-#define TWICE_GAP 100
-const double LOSS_RATE = 0.05; // 丢包率（0.1 表示10%的丢包率）
-
+const double LOSS_RATE = 0.05;// 丢包率（0.1 表示10%的丢包率）
 
 void SimulateDelay() {
     double i = rand() / RAND_MAX;
@@ -172,7 +171,7 @@ DWORD WINAPI SRReciHandle(LPVOID param) {
 
         while (recvfrom(s->s, ReciBuffer, PacketSize, 0, (struct sockaddr*)s->dst_addr, &dst_addr_len) <= 0)
         {
-            if (clock() - s->timer > 5 * MAX_TIME)
+            if (clock() - s->timer >  MAX_TIME)
                 //重发
             {
                 s->timer = clock();
@@ -186,8 +185,8 @@ DWORD WINAPI SRReciHandle(LPVOID param) {
             )
         {
             int rst = s->watiBuffer.SRpop(*dst_package);
-            cout << dst_package->header.ack << " buffer: " << s->watiBuffer.data.size()
-                << " rst: " << rst;
+           // cout << dst_package->header.ack << " buffer: " << s->watiBuffer.data.size()
+             //   << " rst: " << rst;
             switch (rst) {
             case -1:
                 //ACK在窗口范围外
@@ -201,7 +200,7 @@ DWORD WINAPI SRReciHandle(LPVOID param) {
                 break;
             default:
                 s->base += rst;
-                cout << " window --> " << rst<<" base " <<s->base<< endl;
+                cout << " [window] --> " << rst<<" base: " <<s->base << endl;
                 s->timer = clock();
                 print_udp(*dst_package, 2);
                 break;
@@ -250,7 +249,7 @@ DWORD WINAPI SRSendHandle(LPVOID param) {
                 p->header.set_r(1);
                 if (!waitAck[i++])
                     s->_send(p, p->header.data_size);
-                Sleep(2);
+                Sleep(TWICE_GAP);
             }
 
             //s->watiBuffer.SRpop(0);
@@ -298,10 +297,10 @@ DWORD WINAPI SRSendHandle(LPVOID param) {
                 FIN = 1;
 
             }
-            Sleep(2);
+            Sleep(TWICE_GAP);
         }
     }
-    cout << "GDB Send Thread Finished" << endl;
+    cout << "SR Send Thread Finished" << endl;
     return 0;
 }
 
@@ -435,7 +434,7 @@ DWORD WINAPI GBNSendHandle(LPVOID param){
             Sleep(TWICE_GAP);
         }
     }
-    cout << "GDB Send Thread Finished" << endl;
+    cout << "GBN Send Thread Finished" << endl;
     return 0;
 }
 
@@ -473,6 +472,7 @@ DWORD WINAPI SendHandler(LPVOID param) {
             sender->package->packet_data(name_size.c_str(), payload_size);
 
             sender->_send(payload_size);
+            
             //cout.write(sender->package.payload, sizeof(name_size));
             //cout << endl;
             st = false;
@@ -482,7 +482,7 @@ DWORD WINAPI SendHandler(LPVOID param) {
         /*接受ack status!=  超时重传 */
         clock_t sec_st = clock();
         socklen_t dst_addr_len = sizeof(*sender->dst_addr);
-
+        Sleep(TWICE_GAP);
         while (true) {
             while (recvfrom(sender->s, ReciBuffer, PacketSize, 0, (struct sockaddr*)sender->dst_addr, &dst_addr_len) <= 0)
             {
@@ -507,6 +507,7 @@ DWORD WINAPI SendHandler(LPVOID param) {
                 cout << "----- Check correct -----\n";
                 if (dst_package->header.get_end()) {
                     fin = 1;
+                    sender->send_runner_keep = false;
                     break;
                 }
 
@@ -539,6 +540,7 @@ DWORD WINAPI SendHandler(LPVOID param) {
                 sender->package->header.data_size = payload_size;
                 sender->package->packet_data(iter + indx, payload_size);
                 sender->_send(payload_size);
+               
 
                 break;
             }
@@ -546,6 +548,7 @@ DWORD WINAPI SendHandler(LPVOID param) {
             else {
                 cout << "----- check error -----\n ";
                 sender->_send(payload_size);
+                
                 cout << "Send again: send_status: " << status << "seq: " << seq << endl;
   
             }
@@ -554,7 +557,7 @@ DWORD WINAPI SendHandler(LPVOID param) {
         }
 
     }
-
+    
     cout << "Sending Over\n";
      return 0;
 }
@@ -664,8 +667,9 @@ int Sender::get_connection(int type) {
     {
     case 1:
         cout << "\nDEFAULT SENDING " << endl;
-        CreateThread(NULL, 0, SendHandler, (LPVOID)this, 0, NULL);
         send_st = clock();
+        CreateThread(NULL, 0, SendHandler, (LPVOID)this, 0, NULL);
+        
         break;
 
     case 2:
@@ -686,6 +690,7 @@ int Sender::get_connection(int type) {
     while (this->send_runner_keep) 
         Sleep(100);
     
+    Sleep(100);
     SetConsoleTextAttribute(hConsole, BACKGROUND_BLUE | BACKGROUND_GREEN);
     cout << "\n[SYS STATUS] " << endl;
     SetConsoleTextAttribute(hConsole, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);

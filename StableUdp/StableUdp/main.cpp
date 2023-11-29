@@ -15,7 +15,7 @@ using namespace std;
 
 int main(){
 
-   // string filename = "helloworld.txt";
+    //string filename = "helloworld.txt";
     string filename = "2.jpg";
     string cin_buffer;
 
@@ -26,7 +26,7 @@ int main(){
 
     Sender sender = Sender();
     sender.GetFile(filename);
-    sender.get_connection(GBN);
+    sender.get_connection(3);
 
 
     while (true) {
