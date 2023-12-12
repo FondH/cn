@@ -13,9 +13,9 @@
 #pragma comment(lib, "Ws2_32.lib")
 
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
-#define MAX_TIME  0.2*CLOCKS_PER_SEC 
-#define WindowLen 16
-#define TWICE_GAP 32
+#define MAX_TIME  0.1*CLOCKS_PER_SEC 
+#define WindowLen 32
+#define TWICE_GAP 64
 using namespace std;
 
 const double LOSS_RATE = 0.05;// 丢包率（0.1 表示10%的丢包率）
@@ -93,6 +93,7 @@ public:
     friend DWORD WINAPI GBNSendHandle(LPVOID param);
     friend DWORD WINAPI SRReciHandle(LPVOID param);
     friend DWORD WINAPI SRSendHandle(LPVOID param);
+    friend DWORD WINAPI SRReSendHandle(LPVOID param);
     ~Sender();
 };
 Sender::Sender() {
@@ -176,6 +177,7 @@ DWORD WINAPI SRReciHandle(LPVOID param) {
             {
                 s->timer = clock();
                 s->Re = 1;
+                //CreateThread(NULL, 0, SRReSendHandle, (LPVOID)s, 0, NULL);
             }
         }
         Udp* dst_package = (Udp*)ReciBuffer;
@@ -241,6 +243,7 @@ DWORD WINAPI SRSendHandle(LPVOID param) {
         int N = s->Window;
 
         if (FIN || s->Re) {
+
             //Recive线程将s->Re置位，对处于队列中的进行发送。
             vector<Udp*>tmp = s->watiBuffer.data;
             vector<bool>waitAck = s->watiBuffer.waitAck;
@@ -302,6 +305,25 @@ DWORD WINAPI SRSendHandle(LPVOID param) {
     }
     cout << "SR Send Thread Finished" << endl;
     return 0;
+}
+DWORD WINAPI SRReSendHandle(LPVOID param) {
+    Sender* s = (Sender*)param;
+    if (s->Re) {
+       
+        //Recive线程将s->Re置位，对处于队列中的进行发送。
+        vector<Udp*>tmp = s->watiBuffer.data;
+        vector<bool>waitAck = s->watiBuffer.waitAck;
+        int i = 0;
+        for (Udp* p : tmp) {
+            p->header.set_r(1);
+            if (!waitAck[i++])
+                s->_send(p, p->header.data_size);
+            Sleep(TWICE_GAP);
+        }
+
+        //s->watiBuffer.SRpop(0);
+        s->Re = 0;
+    }
 }
 
 DWORD WINAPI GBNReciHandle(LPVOID param) {
